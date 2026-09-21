@@ -61,7 +61,7 @@ private struct RoomScenePreview: View {
 }
 
 #Preview(
-    traits: .fixedLayout(width: 250, height: 400)
+    traits: .fixedLayout(width: 500, height: 800)
 ) {
     RoomScenePreview()
 }

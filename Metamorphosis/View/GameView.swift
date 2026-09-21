@@ -12,7 +12,7 @@ struct GameView: View {
 
                 SpriteView(scene: scene, options: [.allowsTransparency])
                     .frame(
-                        width: min(Self.roomConfig.sceneSize.width, geometry.size.width),
+                        width: geometry.size.width,
                         height: geometry.size.height
                     )
                     .clipped()
@@ -23,8 +23,8 @@ struct GameView: View {
 }
 
 #Preview(
-    traits: .fixedLayout(width: 874, height: 402),
-    .landscapeLeft
+    traits: .fixedLayout(width: 402, height: 874),
+    .portrait
 ) {
     GameView()
 }
