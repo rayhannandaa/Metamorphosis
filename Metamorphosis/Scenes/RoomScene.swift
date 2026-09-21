@@ -3,6 +3,8 @@ import SwiftUI
 
 final class RoomScene: SKScene {
     private let config: RoomConfig
+    private let zoomScale: CGFloat
+    private let initialCameraPosition: CGPoint
     private let cameraNode = SKCameraNode()
     private var hasBuiltWorld = false
 
@@ -11,8 +13,14 @@ final class RoomScene: SKScene {
         config: config
     )
 
-    init(config: RoomConfig) {
+    init(
+        config: RoomConfig,
+        zoomScale: CGFloat = 1,
+        initialCameraPosition: CGPoint? = nil
+    ) {
         self.config = config
+        self.zoomScale = zoomScale
+        self.initialCameraPosition = initialCameraPosition ?? config.initialCameraPosition
         super.init(size: config.sceneSize)
         scaleMode = .aspectFill
         backgroundColor = .black
@@ -24,7 +32,7 @@ final class RoomScene: SKScene {
 
     override func didMove(to view: SKView) {
         buildWorldIfNeeded()
-        setupCameraIfNeeded()
+        setupCameraIfNeeded(in: view)
     }
 
     private func buildWorldIfNeeded() {
@@ -33,15 +41,60 @@ final class RoomScene: SKScene {
         worldController.buildWorld()
     }
 
-    private func setupCameraIfNeeded() {
+    private func setupCameraIfNeeded(in view: SKView) {
         guard cameraNode.parent == nil else { return }
 
-        cameraNode.position = CGPoint(
-            x: config.sceneSize.width / 2,
-            y: config.sceneSize.height / 2
+        cameraNode.setScale(1 / zoomScale)
+        cameraNode.position = clampedCameraPosition(
+            for: initialCameraPosition,
+            in: view
         )
         addChild(cameraNode)
         camera = cameraNode
+    }
+
+    private func clampedCameraPosition(
+        for target: CGPoint,
+        in view: SKView
+    ) -> CGPoint {
+        let baseScale = max(
+            view.bounds.width / config.sceneSize.width,
+            view.bounds.height / config.sceneSize.height
+        )
+        let effectiveScale = baseScale * zoomScale
+        let visibleSize = CGSize(
+            width: view.bounds.width / effectiveScale,
+            height: view.bounds.height / effectiveScale
+        )
+
+        return CGPoint(
+            x: clampedCameraAxis(
+                target.x,
+                visibleLength: visibleSize.width,
+                worldLength: config.sceneSize.width
+            ),
+            y: clampedCameraAxis(
+                target.y,
+                visibleLength: visibleSize.height,
+                worldLength: config.sceneSize.height
+            )
+        )
+    }
+
+    private func clampedCameraAxis(
+        _ value: CGFloat,
+        visibleLength: CGFloat,
+        worldLength: CGFloat
+    ) -> CGFloat {
+        guard visibleLength < worldLength else {
+            return worldLength / 2
+        }
+
+        let halfVisibleLength = visibleLength / 2
+        return min(
+            max(value, halfVisibleLength),
+            worldLength - halfVisibleLength
+        )
     }
 }
 
@@ -49,7 +102,10 @@ private struct RoomScenePreview: View {
     private let scene: RoomScene
 
     init() {
-        let scene = RoomScene(config: .room)
+        let scene = RoomScene(
+            config: .room,
+            initialCameraPosition: CGPoint(x: 250, y: 400)
+        )
         scene.scaleMode = .aspectFit
         self.scene = scene
     }

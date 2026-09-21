@@ -3,6 +3,7 @@ import CoreGraphics
 extension RoomConfig {
     static let room = RoomConfig(
         sceneSize: CGSize(width: 500, height: 800),
+        initialCameraPosition: CGPoint(x: 80, y: 567.55),
         objects: [
             RoomObjectConfig(
                 name: "Floor",
