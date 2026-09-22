@@ -3,22 +3,36 @@ import SwiftUI
 
 final class RoomScene: SKScene {
     private let config: RoomConfig
+    private let playerConfig: PlayerConfig
     private let zoomScale: CGFloat
     private let initialCameraPosition: CGPoint
     private let cameraNode = SKCameraNode()
     private var hasBuiltWorld = false
+    private var lastUpdateTime: TimeInterval?
 
     private lazy var worldController = RoomWorldController(
         scene: self,
         config: config
     )
+    
+    private lazy var playerNode = PlayerNode(
+        config: playerConfig
+    )
+    
+    private lazy var movementController = PlayerMovementController(
+        player: playerNode,
+        config: playerConfig,
+        bounds: CGRect(origin: .zero, size: config.sceneSize)
+    )
 
     init(
         config: RoomConfig,
+        playerConfig: PlayerConfig = .centaur,
         zoomScale: CGFloat = 1,
         initialCameraPosition: CGPoint? = nil
     ) {
         self.config = config
+        self.playerConfig = playerConfig
         self.zoomScale = zoomScale
         self.initialCameraPosition = initialCameraPosition ?? config.initialCameraPosition
         super.init(size: config.sceneSize)
@@ -39,6 +53,24 @@ final class RoomScene: SKScene {
         guard !hasBuiltWorld else { return }
         hasBuiltWorld = true
         worldController.buildWorld()
+        addChild(playerNode)
+    }
+    
+    override func update(_ currentTime: TimeInterval) {
+        defer { lastUpdateTime = currentTime }
+        guard let lastUpdateTime else { return }
+        movementController.update(deltaTime: currentTime - lastUpdateTime)
+        
+        if let view = self.view {
+            cameraNode.position = clampedCameraPosition(
+                for: playerNode.position,
+                in: view
+            )
+        }
+    }
+    
+    func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
+        movementController.setDirection(direction, isActive: isActive)
     }
 
     private func setupCameraIfNeeded(in view: SKView) {
