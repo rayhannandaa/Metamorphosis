@@ -18,7 +18,7 @@ struct GameView: View {
                     )
                     .clipped()
 
-                HUDView()
+                HUDView(scene: scene)
             }
         }
         .ignoresSafeArea()
@@ -26,6 +26,7 @@ struct GameView: View {
 }
 
 private struct HUDView: View {
+    let scene: RoomScene
     private let artboardSize = CGSize(width: 402, height: 874)
     private let buttons: [HUDButtonConfig] = .roomHUD
 
@@ -41,8 +42,10 @@ private struct HUDView: View {
                         size: CGSize(
                             width: button.size.width * scaleX,
                             height: button.size.height * scaleY
-                        )
-                    ) { }
+                        ),
+                        onPress: { setDirection(button.direction, isActive: true) },
+                        onRelease: { setDirection(button.direction, isActive: false) }
+                    )
                     .position(
                         x: button.position.x * scaleX,
                         y: button.position.y * scaleY
@@ -56,6 +59,11 @@ private struct HUDView: View {
             )
         }
     }
+
+    private func setDirection(_ direction: MovementDirection?, isActive: Bool) {
+        guard let direction else { return }
+        scene.setMovementDirection(direction, isActive: isActive)
+    }
 }
 
 private struct HUDButtonConfig {
@@ -63,6 +71,7 @@ private struct HUDButtonConfig {
     let assetName: String
     let size: CGSize
     let position: CGPoint
+    let direction: MovementDirection?
 }
 
 private extension Array where Element == HUDButtonConfig {
@@ -71,31 +80,36 @@ private extension Array where Element == HUDButtonConfig {
             name: "ActionButton",
             assetName: "ActionButton",
             size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 327, y: 736.35)
+            position: CGPoint(x: 327, y: 736.35),
+            direction: nil
         ),
         HUDButtonConfig(
             name: "Right",
             assetName: "Right",
             size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 185, y: 736.35)
+            position: CGPoint(x: 185, y: 736.35),
+            direction: .right
         ),
         HUDButtonConfig(
             name: "Left",
             assetName: "Left",
             size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 75, y: 736.35)
+            position: CGPoint(x: 75, y: 736.35),
+            direction: .left
         ),
         HUDButtonConfig(
             name: "Down",
             assetName: "Down",
             size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 130, y: 795.15)
+            position: CGPoint(x: 130, y: 795.15),
+            direction: .down
         ),
         HUDButtonConfig(
             name: "Up",
             assetName: "Up",
             size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 130, y: 677.45)
+            position: CGPoint(x: 130, y: 677.45),
+            direction: .up
         )
     ]
 }
@@ -103,7 +117,8 @@ private extension Array where Element == HUDButtonConfig {
 private struct PressableButton: View {
     let assetName: String
     let size: CGSize
-    let action: () -> Void
+    var onPress: () -> Void = {}
+    var onRelease: () -> Void = {}
 
     @State private var isPressed = false
     @State private var pressBeganAt: Date?
@@ -126,9 +141,10 @@ private struct PressableButton: View {
                         isPressed = true
                         pressBeganAt = Date()
                         pressGeneration += 1
+                        onPress()
                     }
                     .onEnded { _ in
-                        action()
+                        onRelease()
                         finishVisualPress()
                     }
             )
