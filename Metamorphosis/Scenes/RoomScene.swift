@@ -24,6 +24,7 @@ final class RoomScene: SKScene {
         config: playerConfig,
         bounds: CGRect(origin: .zero, size: config.sceneSize)
     )
+    let asaryunSession = ASARYUNGameSessionController()
 
     init(
         config: RoomConfig,
@@ -54,12 +55,24 @@ final class RoomScene: SKScene {
         hasBuiltWorld = true
         worldController.buildWorld()
         addChild(playerNode)
+        
+        if let window = config.objects.first(where: { $0.name == "Window" }) {
+                asaryunSession.attach(
+                    scene: self,
+                    playerNode: playerNode,
+                    windowPosition: window.position,
+                    windowSize: window.size,
+                    sceneSize: config.sceneSize
+                )
+            }
     }
     
     override func update(_ currentTime: TimeInterval) {
         defer { lastUpdateTime = currentTime }
         guard let lastUpdateTime else { return }
-        movementController.update(deltaTime: currentTime - lastUpdateTime)
+        let deltaTime = currentTime - lastUpdateTime
+            movementController.update(deltaTime: deltaTime)
+            asaryunSession.update(deltaTime: deltaTime)
         
         if let view = self.view {
             cameraNode.position = clampedCameraPosition(
@@ -70,6 +83,7 @@ final class RoomScene: SKScene {
     }
     
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
+        guard asaryunSession.phase == .worm || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
     }
 
