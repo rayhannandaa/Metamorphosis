@@ -12,7 +12,10 @@ class GameViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        let hostingController = UIHostingController(rootView: GameView())
+        let hostingController = UIHostingController(
+            rootView: ASARYUNIntroRootView()
+        )
+        
         addChild(hostingController)
         hostingController.view.frame = view.bounds
         hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]

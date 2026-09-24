@@ -5,7 +5,8 @@ import Foundation
 struct GameView: View {
     private static let roomConfig = RoomConfig.room
     private let scene = RoomScene(config: roomConfig, zoomScale: 600 / 437)
-    
+    @State private var showIntroMonologue = true
+
 
     var body: some View {
         GeometryReader { geometry in
@@ -24,7 +25,14 @@ struct GameView: View {
                 
                 
                 MonologueObserver(manager: scene.interactableManager)
-                
+                if showIntroMonologue {
+                        GameIntroMonologueOverlay(
+                            text: "What happened, why did I suddenly shrink",
+                            onDismiss: {
+                                showIntroMonologue = false
+                            }
+                        )
+                    }
                 
 //                if let monologue = scene.interactableManager.activeMonologue {
 //                    MonologueOverlayView(
@@ -36,6 +44,28 @@ struct GameView: View {
             }
         }
         .ignoresSafeArea()
+    }
+}
+
+private struct GameIntroMonologueOverlay: View {
+    let text: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black
+                .opacity(0.45)
+                .ignoresSafeArea()
+
+            ASARYUNDialogBubble(
+                text: text,
+                hint: "Tap to continue"
+            )
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onDismiss()
+        }
     }
 }
 

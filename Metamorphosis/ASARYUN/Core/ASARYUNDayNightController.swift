@@ -3,7 +3,7 @@
 //  ASARYUN
 //
 //  Owns the visual side of the day/night cycle. The sunlight is one
-//  persistent node anchored to the CENTER of the window.
+//  persistent trapezoid anchored beneath the window.
 //
 
 import SpriteKit
@@ -13,7 +13,8 @@ final class ASARYUNDayNightController {
     private let windowPosition: CGPoint
     private let windowSize: CGSize
 
-    private let nightSky: SKSpriteNode
+    private weak var windowDay: SKSpriteNode?
+    private weak var windowNight: SKSpriteNode?
     private let nightDim: SKSpriteNode
     private let sunRay: ASARYUNSunRayNode
 
@@ -22,12 +23,10 @@ final class ASARYUNDayNightController {
         self.windowPosition = windowPosition
         self.windowSize = windowSize
 
-        nightSky = SKSpriteNode(imageNamed: "ASARYUN_NightSky")
-        nightSky.size = windowSize
-        nightSky.position = windowPosition
-        nightSky.zPosition = 2.05
-        nightSky.alpha = 0
-        nightSky.name = "ASARYUN_NightSky"
+        windowDay = scene.childNode(withName: "//WindowDay") as? SKSpriteNode
+        windowNight = scene.childNode(withName: "//WindowNight") as? SKSpriteNode
+        windowDay?.alpha = 1
+        windowNight?.alpha = 0
 
         nightDim = SKSpriteNode(
             color: SKColor(red: 0.03, green: 0.04, blue: 0.12, alpha: 0.55),
@@ -38,20 +37,30 @@ final class ASARYUNDayNightController {
         nightDim.alpha = 0
         nightDim.name = "ASARYUN_NightDim"
 
-        sunRay = ASARYUNSunRayNode(size: ASARYUNGameConfig.sunRaySize)
+        sunRay = ASARYUNSunRayNode(
+            topWidth: ASARYUNGameConfig.sunRayTopWidth,
+            bottomWidth: ASARYUNGameConfig.sunRayBottomWidth,
+            height: ASARYUNGameConfig.sunRayHeight
+        )
 
-        scene.addChild(nightSky)
         scene.addChild(sunRay)
         scene.addChild(nightDim)
 
-        // Center of the actual window — no rightward drift.
-        sunRay.position = windowPosition
-        sunRay.setAngle(ASARYUNGameConfig.sunRayAngles[0], animated: false)
+        // Attach the beam's horizontal top edge to the bottom of the actual
+        // window artwork. Fall back to the supplied window geometry if the
+        // artwork is not present in the scene.
+        let sourceWindow = windowDay ?? windowNight
+        sunRay.position = CGPoint(
+            x: sourceWindow?.frame.midX ?? windowPosition.x,
+            y: sourceWindow?.frame.minY ?? (windowPosition.y - windowSize.height / 2)
+        )
+        sunRay.setBottomOffset(ASARYUNGameConfig.sunRayBottomOffsets[0], animated: false)
     }
 
     func setDaytime(_ isDaytime: Bool) {
         let duration = 0.75
-        nightSky.run(.fadeAlpha(to: isDaytime ? 0 : 1, duration: duration))
+        windowDay?.run(.fadeAlpha(to: isDaytime ? 1 : 0, duration: duration))
+        windowNight?.run(.fadeAlpha(to: isDaytime ? 0 : 1, duration: duration))
         nightDim.run(.fadeAlpha(to: isDaytime ? 0 : 0.55, duration: duration))
 
         if isDaytime {
@@ -63,12 +72,11 @@ final class ASARYUNDayNightController {
         }
     }
 
-    /// Moves the same ray through the five fixed positions. The ray remains
-    /// centered in the window for its entire lifetime.
+    /// Sweeps the wider bottom edge through five fixed positions while the
+    /// top edge remains horizontal and attached to the window.
     func setSunRay(index: Int) {
-        guard ASARYUNGameConfig.sunRayAngles.indices.contains(index) else { return }
-        sunRay.position = windowPosition
-        sunRay.setAngle(ASARYUNGameConfig.sunRayAngles[index])
+        guard ASARYUNGameConfig.sunRayBottomOffsets.indices.contains(index) else { return }
+        sunRay.setBottomOffset(ASARYUNGameConfig.sunRayBottomOffsets[index])
         sunRay.show()
     }
 

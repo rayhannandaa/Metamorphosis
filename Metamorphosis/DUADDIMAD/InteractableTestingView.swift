@@ -8,12 +8,13 @@ import SpriteKit
 import SwiftUI
 
 /// An interactive test scene dedicated to interactable objects.
-/// Allows walking the character around, approaching simple rectangular objects,
-/// observing proximity feedback (flashing & subtle shaking), and triggering monologues.
+/// Allows walking the character around the real room assets, observing proximity
+/// feedback, and triggering monologues.
 final class InteractableTestScene: SKScene {
     let interactableManager = InteractableManager()
 
     private let playerNode = SKShapeNode(rectOf: CGSize(width: 32, height: 42), cornerRadius: 4)
+    private lazy var worldController = RoomWorldController(scene: self, config: .room)
     private var activeDirections: Set<MovementDirection> = []
     private var lastUpdateTime: TimeInterval?
 
@@ -44,7 +45,8 @@ final class InteractableTestScene: SKScene {
         roomBorder.zPosition = 0
         addChild(roomBorder)
 
-        // Setup the 9 rectangular interactable objects
+        // Build the real room assets, then associate interactions with them.
+        worldController.buildWorld()
         interactableManager.setupObjects(in: self)
 
         // Setup Player representation
@@ -81,6 +83,17 @@ final class InteractableTestScene: SKScene {
         } else {
             activeDirections.remove(direction)
         }
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: self)
+        interactableManager.triggerInteraction(
+            at: location,
+            in: self,
+            phase: currentPhase,
+            isDaytime: isDaytime
+        )
     }
 
     func teleportPlayer(to point: CGPoint) {
@@ -238,7 +251,9 @@ struct InteractableTestingView: View {
             Menu {
                 ForEach(InteractableObjectType.allCases) { type in
                     Button(type.displayName) {
-                        sceneHolder.scene.teleportPlayer(to: type.defaultPosition)
+                        if let position = sceneHolder.manager.position(for: type) {
+                            sceneHolder.scene.teleportPlayer(to: position)
+                        }
                     }
                 }
             } label: {

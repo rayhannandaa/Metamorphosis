@@ -21,6 +21,7 @@ final class RoomWorldController {
         node.size = object.size
         node.position = object.position
         node.zPosition = object.zPosition
+        node.zRotation = object.rotation
         scene.addChild(node)
     }
 }

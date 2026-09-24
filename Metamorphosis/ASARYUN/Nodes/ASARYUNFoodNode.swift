@@ -2,21 +2,39 @@
 //  ASARYUNFoodNode.swift
 //  ASARYUN
 //
-//  A small piece of food the worm can find while exploring the room.
-//  Uses the generated "ASARYUN_Food" texture (Assets.xcassets/ASARYUN).
+//  A piece of food the worm can find while exploring the room.
 //
 
 import SpriteKit
 
+enum ASARYUNFoodKind: CaseIterable {
+    case watermelon
+    case cheese
+
+    var assetName: String {
+        switch self {
+        case .watermelon: return "Watermelon"
+        case .cheese: return "Cheese"
+        }
+    }
+
+    var size: CGSize {
+        switch self {
+        case .watermelon: return CGSize(width: 26, height: 26)
+        case .cheese: return CGSize(width: 26, height: 25)
+        }
+    }
+}
+
 final class ASARYUNFoodNode: SKSpriteNode {
-    init(position: CGPoint) {
-        let texture = SKTexture(imageNamed: "ASARYUN_Food")
-        super.init(texture: texture, color: .clear, size: CGSize(width: 26, height: 26))
+    init(position: CGPoint, kind: ASARYUNFoodKind) {
+        let texture = SKTexture(imageNamed: kind.assetName)
+        super.init(texture: texture, color: .clear, size: kind.size)
         self.position = position
-        name = "ASARYUN_Food"
+        name = "ASARYUN_Food_\(kind.assetName)"
         zPosition = 2.6
 
-        physicsBody = SKPhysicsBody(circleOfRadius: 13)
+        physicsBody = SKPhysicsBody(circleOfRadius: min(kind.size.width, kind.size.height) / 2)
         physicsBody?.isDynamic = false
         physicsBody?.affectedByGravity = false
         physicsBody?.categoryBitMask = ASARYUNPhysicsCategory.food
