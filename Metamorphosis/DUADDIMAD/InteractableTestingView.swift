@@ -170,11 +170,18 @@ struct InteractableTestingView: View {
                 )
             }
         }
-        .onChange(of: selectedPhase) { newPhase in
-            sceneHolder.scene.currentPhase = newPhase
+//        .onChange(of: selectedPhase) { newPhase in
+//            sceneHolder.scene.currentPhase = newPhase
+//        }
+//        .onChange(of: isDaytime) { newDay in
+//            sceneHolder.scene.isDaytime = newDay
+//        }
+        
+        .onChange(of: selectedPhase) { oldValue, newValue in
+        sceneHolder.scene.currentPhase = newValue
         }
-        .onChange(of: isDaytime) { newDay in
-            sceneHolder.scene.isDaytime = newDay
+        .onChange(of: isDaytime) { oldValue, newValue in
+        sceneHolder.scene.isDaytime = newValue
         }
     }
 
