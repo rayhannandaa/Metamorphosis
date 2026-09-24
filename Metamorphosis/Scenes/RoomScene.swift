@@ -1,7 +1,11 @@
 import SpriteKit
 import SwiftUI
 
+
+
 final class RoomScene: SKScene {
+    let interactableManager = InteractableManager()
+
     private let config: RoomConfig
     private let playerConfig: PlayerConfig
     private let zoomScale: CGFloat
@@ -56,6 +60,8 @@ final class RoomScene: SKScene {
         worldController.buildWorld()
         addChild(playerNode)
         
+        interactableManager.setupObjects(in: self)
+        
         if let window = config.objects.first(where: { $0.name == "Window" }) {
                 asaryunSession.attach(
                     scene: self,
@@ -68,6 +74,9 @@ final class RoomScene: SKScene {
     }
     
     override func update(_ currentTime: TimeInterval) {
+        
+        interactableManager.update(playerPosition: playerNode.position)
+        
         defer { lastUpdateTime = currentTime }
         guard let lastUpdateTime else { return }
         let deltaTime = currentTime - lastUpdateTime
@@ -161,6 +170,12 @@ private struct RoomScenePreview: View {
             .background(Color.black)
     }
 }
+
+
+
+
+
+
 
 #Preview(
     traits: .fixedLayout(width: 500, height: 800)

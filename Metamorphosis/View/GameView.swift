@@ -5,6 +5,7 @@ import Foundation
 struct GameView: View {
     private static let roomConfig = RoomConfig.room
     private let scene = RoomScene(config: roomConfig, zoomScale: 600 / 437)
+    
 
     var body: some View {
         GeometryReader { geometry in
@@ -20,6 +21,18 @@ struct GameView: View {
 
                 HUDView(scene: scene)
                 ASARYUNHUDOverlay(session: scene.asaryunSession)
+                
+                
+                MonologueObserver(manager: scene.interactableManager)
+                
+                
+//                if let monologue = scene.interactableManager.activeMonologue {
+//                    MonologueOverlayView(
+//                    objectName: monologue.objectName,
+//                    monologueText: monologue.text,
+//                    onDismiss: { scene.interactableManager.dismissMonologue() }
+//                    )
+//                }
             }
         }
         .ignoresSafeArea()
@@ -44,7 +57,18 @@ private struct HUDView: View {
                             width: button.size.width * scaleX,
                             height: button.size.height * scaleY
                         ),
-                        onPress: { setDirection(button.direction, isActive: true) },
+                        onPress: {
+                            // Jika tombol Action yang ditekan, panggil interaksi
+                            if button.name == "ActionButton" {
+                                scene.interactableManager.triggerInteraction(
+                                    phase: scene.asaryunSession.phase,
+                                    isDaytime: scene.asaryunSession.isDaytime
+                                )
+                            } else {
+                                // Jika tombol arah yang ditekan, karakter berjalan
+                                setDirection(button.direction, isActive: true)
+                            }
+                        },
                         onRelease: { setDirection(button.direction, isActive: false) }
                     )
                     .position(
@@ -74,6 +98,8 @@ private struct HUDButtonConfig {
     let position: CGPoint
     let direction: MovementDirection?
 }
+
+
 
 private extension Array where Element == HUDButtonConfig {
     static let roomHUD: [HUDButtonConfig] = [
@@ -175,4 +201,19 @@ private struct PressableButton: View {
     .portrait
 ) {
     GameView()
+}
+
+
+struct MonologueObserver: View {
+    @ObservedObject var manager: InteractableManager
+    
+    var body: some View {
+        if let monologue = manager.activeMonologue {
+            MonologueOverlayView(
+                objectName: monologue.objectName,
+                monologueText: monologue.text,
+                onDismiss: { manager.dismissMonologue() }
+            )
+        }
+    }
 }
