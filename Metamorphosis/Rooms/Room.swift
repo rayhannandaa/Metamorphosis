@@ -34,6 +34,20 @@ extension RoomConfig {
                 zPosition: 2
             ),
             RoomObjectConfig(
+                name: "WindowDay",
+                assetName: "WindowDay",
+                size: CGSize(width: 60, height: 57),
+                position: CGPoint(x: 250, y: 718.5),
+                zPosition: 2.1
+            ),
+            RoomObjectConfig(
+                name: "WindowNight",
+                assetName: "WindowNight",
+                size: CGSize(width: 60, height: 57),
+                position: CGPoint(x: 250, y: 718.5),
+                zPosition: 2.2
+            ),
+            RoomObjectConfig(
                 name: "Bed",
                 assetName: "Bed",
                 size: CGSize(width: 100, height: 154.9),
@@ -88,6 +102,43 @@ extension RoomConfig {
                 size: CGSize(width: 150, height: 190),
                 position: CGPoint(x: 405, y: 365),
                 zPosition: 2
+            ),
+            RoomObjectConfig(
+                name: "Door",
+                assetName: "Door",
+                size: CGSize(width: 44.3, height: 155.2),
+                position: CGPoint(x: 42.15, y: 337.4),
+                zPosition: 2
+            ),
+            RoomObjectConfig(
+                name: "Beanie",
+                assetName: "Beanie",
+                size: CGSize(width: 35, height: 36.9),
+                position: CGPoint(x: 142.5, y: 81.55),
+                zPosition: 2.1
+            ),
+            RoomObjectConfig(
+                name: "Phone",
+                assetName: "Phone",
+                size: CGSize(width: 15, height: 25),
+                position: CGPoint(x: 390.6, y: 80),
+                zPosition: 2.1,
+                rotation: 0 * .pi / 180
+            ),
+            RoomObjectConfig(
+                name: "Photo",
+                assetName: "Photo",
+                size: CGSize(width: 50, height: 60.2),
+                position: CGPoint(x: 435, y: 345.6),
+                zPosition: 2.1
+            ),
+            RoomObjectConfig(
+                name: "Laptop",
+                assetName: "Laptop",
+                size: CGSize(width: 33, height: 47.2),
+                position: CGPoint(x: 356.5, y: 436.4),
+                zPosition: 2.1,
+                rotation: 0 * .pi / 180
             ),
             RoomObjectConfig(
                 name: "WallsSide",

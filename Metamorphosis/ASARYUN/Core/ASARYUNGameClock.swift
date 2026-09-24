@@ -89,7 +89,7 @@ final class ASARYUNGameClock {
             return
         }
 
-        guard sunRayIndex < ASARYUNGameConfig.sunRayAngles.count - 1 else { return }
+        guard sunRayIndex < ASARYUNGameConfig.sunRayBottomOffsets.count - 1 else { return }
 
         let nextThreshold =
             ASARYUNGameConfig.firstSunRayDelay +

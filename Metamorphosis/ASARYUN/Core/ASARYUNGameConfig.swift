@@ -31,37 +31,36 @@ enum ASARYUNGameConfig {
     // MARK: Sunlight ray
     /// The first sunlight appears 12 seconds after 06:00.
     static let firstSunRayDelay: TimeInterval = 12
-    /// Five stable positions across the daylight period:
-    /// full "/", slight "/", "|", slight "\", full "\".
-    /// The ray stays at each position until the next interval.
+    /// Five stable positions across the daylight period. The beam's top
+    /// remains attached to the window while its wider bottom edge sweeps
+    /// horizontally, like a lighthouse beam.
     static let sunRayInterval: TimeInterval = 18
     static let sunRayTransitionDuration: TimeInterval = 0.75
     static let sunRayAlpha: CGFloat = 0.55
+    static let sunRayEdgeBlurRadius: CGFloat = 15
 
-    /// Rotation angles, in order:
-    /// full "/" -> slight "/" -> "|" -> slight "\" -> full "\".
-    static let sunRayAngles: [CGFloat] = [
-        -35 * .pi / 180,
-        -17.5 * .pi / 180,
-        0,
-        17.5 * .pi / 180,
-        35 * .pi / 180
-    ]
-
-    /// Ray size. The ray is anchored to the center of the window.
-    static let sunRaySize = CGSize(width: 70, height: 460)
+    /// The top edge matches the 60-point-wide day/night window artwork.
+    /// The bottom edge is deliberately wider to create the light spread.
+    static let sunRayTopWidth: CGFloat = 60
+    static let sunRayBottomWidth: CGFloat = 120
+    static let sunRayHeight: CGFloat = 460
+    static let sunRayBottomCurveDepth: CGFloat = 30
+    static let sunRayBottomOffsets: [CGFloat] = [-110, -55, 0, 55, 110]
 
     // MARK: Demo length
     static let totalDemoDays = 3
 
     // MARK: Bars
     static let maxBarValue: CGFloat = 100
+    static let initialHungerValue: CGFloat = 25
     static let stressIncreasePerSunHit: CGFloat = 18
-    static let stressSunIntervalSeconds: TimeInterval = 2.5
+    static let stressSunIntervalSeconds: TimeInterval = 1.25
     static let stressDecayPerSecond: CGFloat = 1.5
     static let hungerDepletionPerSecond: CGFloat = (maxBarValue / 2) / CGFloat(cycleDuration)
     static let hungerRestoreOnFood: CGFloat = 30
     static let foodPerDay = 4
+    static let foodSpawnClearance: CGFloat = 6
+    static let foodSpawnMaxAttempts = 100
 
     // MARK: HUD refresh
     /// The game keeps running at the normal SpriteKit frame rate, but the

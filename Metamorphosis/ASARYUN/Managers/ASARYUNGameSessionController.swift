@@ -25,7 +25,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     @Published private(set) var isDaytime: Bool = true
     @Published private(set) var displayTime: String = "06:00"
     @Published private(set) var stressValue: CGFloat = 0
-    @Published private(set) var hungerValue: CGFloat = ASARYUNGameConfig.maxBarValue
+    @Published private(set) var hungerValue: CGFloat = ASARYUNGameConfig.initialHungerValue
     @Published private(set) var isGameComplete: Bool = false
 
     // MARK: Internals
@@ -40,7 +40,8 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     private var hasAttached = false
     private var hudRefreshAccumulator: TimeInterval = 0
     private var pendingStressValue: CGFloat = 0
-    private var pendingHungerValue: CGFloat = ASARYUNGameConfig.maxBarValue
+    private var pendingHungerValue: CGFloat = ASARYUNGameConfig.initialHungerValue
+    private var isFoodPlacementValid: ((CGPoint, CGSize) -> Bool)?
 
     // How many sun rays the worm is currently overlapping, and how long
     // it's been continuously standing in at least one of them.
@@ -54,13 +55,15 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         playerNode: SKNode,
         windowPosition: CGPoint,
         windowSize: CGSize,
-        sceneSize: CGSize
+        sceneSize: CGSize,
+        isFoodPlacementValid: @escaping (CGPoint, CGSize) -> Bool
     ) {
         guard !hasAttached else { return }
         hasAttached = true
 
         self.scene = scene
         self.playerNode = playerNode
+        self.isFoodPlacementValid = isFoodPlacementValid
 
         scene.physicsWorld.contactDelegate = self
         scene.physicsWorld.gravity = .zero
@@ -186,10 +189,44 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     private func spawnFood(count: Int) {
         guard let scene else { return }
         let size = scene.size
+
         for _ in 0..<count {
-            let x = CGFloat.random(in: 60...(size.width - 60))
-            let y = CGFloat.random(in: 120...(size.height - 160))
-            let food = ASARYUNFoodNode(position: CGPoint(x: x, y: y))
+            guard let kind = ASARYUNFoodKind.allCases.randomElement() else { continue }
+            var spawnPosition: CGPoint?
+
+            for _ in 0..<ASARYUNGameConfig.foodSpawnMaxAttempts {
+                let candidate = CGPoint(
+                    x: CGFloat.random(in: 60...(size.width - 60)),
+                    y: CGFloat.random(in: 120...(size.height - 160))
+                )
+
+                let clearsRoomObjects = isFoodPlacementValid?(candidate, kind.size) ?? false
+                let candidateFrame = CGRect(
+                    x: candidate.x - kind.size.width / 2,
+                    y: candidate.y - kind.size.height / 2,
+                    width: kind.size.width,
+                    height: kind.size.height
+                ).insetBy(
+                    dx: -ASARYUNGameConfig.foodSpawnClearance,
+                    dy: -ASARYUNGameConfig.foodSpawnClearance
+                )
+                let clearsOtherFood = foodNodes.allSatisfy { food in
+                    !candidateFrame.intersects(
+                        food.frame.insetBy(
+                            dx: -ASARYUNGameConfig.foodSpawnClearance,
+                            dy: -ASARYUNGameConfig.foodSpawnClearance
+                        )
+                    )
+                }
+
+                if clearsRoomObjects && clearsOtherFood {
+                    spawnPosition = candidate
+                    break
+                }
+            }
+
+            guard let spawnPosition else { continue }
+            let food = ASARYUNFoodNode(position: spawnPosition, kind: kind)
             scene.addChild(food)
             foodNodes.append(food)
         }
@@ -201,7 +238,12 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
 
         if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.sunRay) {
             guard phase == .worm else { return }
+            let isBeginningExposure = sunContactCount == 0
             sunContactCount += 1
+            if isBeginningExposure {
+                sunExposureTimer = 0
+                stress.registerSunHit()
+            }
         } else if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.food) {
             let foodBody = contact.bodyA.categoryBitMask == ASARYUNPhysicsCategory.food ? contact.bodyA : contact.bodyB
             guard let foodNode = foodBody.node as? ASARYUNFoodNode else { return }

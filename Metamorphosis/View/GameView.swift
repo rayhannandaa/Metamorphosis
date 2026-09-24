@@ -57,66 +57,10 @@ private struct GameIntroMonologueOverlay: View {
                 .opacity(0.45)
                 .ignoresSafeArea()
 
-            VStack {
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("ASARYUN")
-                        .font(
-                            .system(
-                                size: 12,
-                                weight: .bold,
-                                design: .monospaced
-                            )
-                        )
-                        .foregroundStyle(.white.opacity(0.55))
-                        .tracking(2)
-
-                    Text(text)
-                        .font(
-                            .system(
-                                size: 18,
-                                weight: .medium,
-                                design: .serif
-                            )
-                        )
-                        .foregroundStyle(.white)
-                        .lineSpacing(5)
-                        .fixedSize(
-                            horizontal: false,
-                            vertical: true
-                        )
-
-                    Text("Tap to continue")
-                        .font(
-                            .system(
-                                size: 11,
-                                weight: .regular,
-                                design: .monospaced
-                            )
-                        )
-                        .foregroundStyle(.white.opacity(0.45))
-                        .frame(
-                            maxWidth: .infinity,
-                            alignment: .trailing
-                        )
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.black.opacity(0.82))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(
-                                    Color.white.opacity(0.18),
-                                    lineWidth: 1
-                                )
-                        )
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 44)
-            }
+            ASARYUNDialogBubble(
+                text: text,
+                hint: "Tap to continue"
+            )
         }
         .contentShape(Rectangle())
         .onTapGesture {

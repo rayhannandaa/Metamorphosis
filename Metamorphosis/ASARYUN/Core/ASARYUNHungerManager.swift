@@ -10,7 +10,7 @@ import CoreGraphics
 import Foundation
 
 final class ASARYUNHungerManager {
-    private(set) var value: CGFloat = ASARYUNGameConfig.maxBarValue
+    private(set) var value: CGFloat = ASARYUNGameConfig.initialHungerValue
     var onChange: ((CGFloat) -> Void)?
     var onStarving: (() -> Void)?
 
@@ -35,7 +35,7 @@ final class ASARYUNHungerManager {
     }
 
     func reset() {
-        value = ASARYUNGameConfig.maxBarValue
+        value = ASARYUNGameConfig.initialHungerValue
         didNotifyStarving = false
         onChange?(value)
     }

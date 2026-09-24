@@ -3,137 +3,86 @@
 //  Metamorphosis
 //
 
-import CoreGraphics
 import SpriteKit
 
-/// A SpriteKit node representing an interactable object rendered as a simple rectangle.
-/// It provides visual feedback (flashing alpha and subtle shaking) when the character
-/// is in proximity.
-final class InteractableObjectNode: SKNode {
+/// Associates interaction behavior with an existing room sprite.
+/// No additional placeholder node is rendered in the scene.
+final class InteractableObjectNode {
     let objectType: InteractableObjectType
-    let baseSize: CGSize
-    let basePosition: CGPoint
-    let proximityRadius: CGFloat
+    let targetNode: SKSpriteNode
+    let interactionMargin: CGFloat
 
     private(set) var isHighlighted: Bool = false
-
-    private let visualNode: SKShapeNode
-    private let labelNode: SKLabelNode
-
-    private static let flashActionKey = "proximity_flash"
-    private static let shakeActionKey = "proximity_shake"
+    private let markerNode: MarkerNode
+    private let markerVerticalGap: CGFloat = 12
+    private let markerZPosition: CGFloat = 20
 
     init(
         objectType: InteractableObjectType,
-        position: CGPoint? = nil,
-        size: CGSize? = nil,
-        proximityRadius: CGFloat? = nil
+        targetNode: SKSpriteNode,
+        interactionMargin: CGFloat
     ) {
         self.objectType = objectType
-        let effectiveSize = size ?? objectType.defaultSize
-        let effectivePos = position ?? objectType.defaultPosition
-        self.baseSize = effectiveSize
-        self.basePosition = effectivePos
-        self.proximityRadius = proximityRadius ?? (max(effectiveSize.width, effectiveSize.height) * 0.5 + 40.0)
+        self.targetNode = targetNode
+        self.interactionMargin = interactionMargin
+        self.markerNode = MarkerNode(objectType: objectType)
 
-        // Simple rectangle visual
-        let rect = CGRect(
-            x: -effectiveSize.width / 2,
-            y: -effectiveSize.height / 2,
-            width: effectiveSize.width,
-            height: effectiveSize.height
-        )
-        visualNode = SKShapeNode(rect: rect, cornerRadius: 4)
-        visualNode.fillColor = objectType.defaultColor
-        visualNode.strokeColor = SKColor.white.withAlphaComponent(0.6)
-        visualNode.lineWidth = 1.5
-
-        // Label displaying object name
-        labelNode = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
-        labelNode.text = objectType.displayName
-        labelNode.fontSize = min(12, max(9, effectiveSize.height * 0.22))
-        labelNode.fontColor = .white
-        labelNode.verticalAlignmentMode = .center
-        labelNode.horizontalAlignmentMode = .center
-        labelNode.zPosition = 1
-
-        super.init()
-
-        self.name = "Interactable_\(objectType.rawValue)"
-        self.position = effectivePos
-        self.zPosition = 2.4 // Above floor/room background
-
-        addChild(visualNode)
-        addChild(labelNode)
-    }
-
-    required init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        markerNode.zPosition = markerZPosition
+        updateMarkerPosition()
+        targetNode.parent?.addChild(markerNode)
     }
 
     // MARK: - Proximity Check
 
-    /// Computes distance from this object's center to a given point (e.g. player position).
+    /// Computes the distance to the nearest edge of the real sprite. Converting
+    /// into the sprite's local coordinates makes this work for rotated assets.
     func distance(to point: CGPoint) -> CGFloat {
-        let dx = position.x - point.x
-        let dy = position.y - point.y
+        guard let parent = targetNode.parent else { return .infinity }
+
+        let localPoint = targetNode.convert(point, from: parent)
+        let bounds = CGRect(
+            x: -targetNode.size.width * targetNode.anchorPoint.x,
+            y: -targetNode.size.height * targetNode.anchorPoint.y,
+            width: targetNode.size.width,
+            height: targetNode.size.height
+        )
+        let nearestX = min(max(localPoint.x, bounds.minX), bounds.maxX)
+        let nearestY = min(max(localPoint.y, bounds.minY), bounds.maxY)
+        let dx = localPoint.x - nearestX
+        let dy = localPoint.y - nearestY
         return (dx * dx + dy * dy).squareRoot()
     }
 
     /// Determines if the given position is within interaction proximity.
     func isInProximity(of point: CGPoint) -> Bool {
-        return distance(to: point) <= proximityRadius
+        distance(to: point) <= interactionMargin
     }
 
-    // MARK: - Visual Feedback (Flashing & Subtle Shaking)
+    // MARK: - Marker
 
-    /// Updates whether the object is highlighted due to character proximity.
+    /// Shows the Room 0-style marker above the real asset.
     func setHighlighted(_ highlighted: Bool) {
         guard highlighted != isHighlighted else { return }
         isHighlighted = highlighted
 
         if highlighted {
-            startFlashing()
-            startSubtleShaking()
-            visualNode.strokeColor = SKColor.yellow
-            visualNode.lineWidth = 2.5
+            updateMarkerPosition()
+            markerNode.show()
         } else {
-            stopFlashing()
-            stopSubtleShaking()
-            visualNode.strokeColor = SKColor.white.withAlphaComponent(0.6)
-            visualNode.lineWidth = 1.5
+            markerNode.hide()
         }
     }
 
-    private func startFlashing() {
-        // Continuous flashing between dim alpha and bright alpha
-        visualNode.removeAction(forKey: Self.flashActionKey)
-        let fadeOut = SKAction.fadeAlpha(to: 0.45, duration: 0.22)
-        let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.22)
-        let sequence = SKAction.sequence([fadeOut, fadeIn])
-        visualNode.run(SKAction.repeatForever(sequence), withKey: Self.flashActionKey)
+    func removeMarker() {
+        markerNode.removeFromParent()
     }
 
-    private func stopFlashing() {
-        visualNode.removeAction(forKey: Self.flashActionKey)
-        visualNode.alpha = 1.0
-    }
-
-    private func startSubtleShaking() {
-        // Subtle micro-oscillations with a resting interval
-        visualNode.removeAction(forKey: Self.shakeActionKey)
-        let jiggle1 = SKAction.moveBy(x: -1.2, y: 0.6, duration: 0.04)
-        let jiggle2 = SKAction.moveBy(x: 2.4, y: -1.2, duration: 0.04)
-        let jiggle3 = SKAction.moveBy(x: -1.2, y: 0.6, duration: 0.04)
-        let reset = SKAction.move(to: .zero, duration: 0.04)
-        let pause = SKAction.wait(forDuration: 1.2)
-        let shakeSeq = SKAction.sequence([jiggle1, jiggle2, jiggle3, reset, pause])
-        visualNode.run(SKAction.repeatForever(shakeSeq), withKey: Self.shakeActionKey)
-    }
-
-    private func stopSubtleShaking() {
-        visualNode.removeAction(forKey: Self.shakeActionKey)
-        visualNode.position = .zero
+    private func updateMarkerPosition() {
+        let targetFrame = targetNode.frame
+        markerNode.position = CGPoint(
+            x: targetFrame.midX,
+            y: targetFrame.maxY + markerVerticalGap
+        )
     }
 
     // MARK: - Interaction
