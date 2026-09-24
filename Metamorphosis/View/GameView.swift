@@ -19,6 +19,7 @@ struct GameView: View {
                     .clipped()
 
                 HUDView(scene: scene)
+                ASARYUNHUDOverlay(session: scene.asaryunSession)
             }
         }
         .ignoresSafeArea()
