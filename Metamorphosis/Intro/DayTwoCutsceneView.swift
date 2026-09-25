@@ -6,13 +6,11 @@
 //
 
 
-import Foundation
 import SwiftUI
 
 struct DayTwoCutsceneView: View {
     let onContinue: () -> Void
 
-    @State private var shakeOffset: CGFloat = -5.0
     @State private var showDialog = false
     @State private var hasContinued = false
     @State private var dialogIndex = 0
@@ -26,60 +24,43 @@ struct DayTwoCutsceneView: View {
     ]
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black
-                    .ignoresSafeArea()
+        ZStack {
+            Color.clear
+                .contentShape(Rectangle())
 
-                Image("Cocoon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: geometry.size.width)
-                    .offset(x: shakeOffset)
-                    .animation(
-                        .linear(duration: 0.05)
-                            .repeatForever(autoreverses: true),
-                        value: shakeOffset
-                    )
-
-                if showDialog {
-                    DialogBubbleView(
-                        text: dialogs[dialogIndex],
-                        hint: "Tap to continue"
-                    )
-                    .transition(.move(edge: .bottom))
-                }
+            if showDialog {
+                DialogBubbleView(
+                    text: dialogs[dialogIndex],
+                    hint: "Tap to continue"
+                )
+                .transition(.move(edge: .bottom))
             }
-            .contentShape(Rectangle())
-            .animation(
-                .easeOut(duration: dialogAnimationDuration),
-                value: showDialog
-            )
-            .onTapGesture {
-                guard showDialog, !hasContinued else { return }
+        }
+        .contentShape(Rectangle())
+        .animation(
+            .easeOut(duration: dialogAnimationDuration),
+            value: showDialog
+        )
+        .onTapGesture {
+            guard showDialog, !hasContinued else { return }
 
-                if dialogIndex < dialogs.count - 1 {
-                    dialogIndex += 1
-                    return
-                }
-
-                hasContinued = true
-                showDialog = false
-
-                DispatchQueue.main.asyncAfter(
-                    deadline: .now() + dialogAnimationDuration
-                ) {
-                    onContinue()
-                }
+            if dialogIndex < dialogs.count - 1 {
+                dialogIndex += 1
+                return
             }
-            .onAppear {
-                shakeOffset = 5.0
 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    guard !hasContinued else { return }
-                    showDialog = true
-                }
+            hasContinued = true
+            showDialog = false
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(dialogAnimationDuration))
+                onContinue()
             }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(1.0))
+            guard !hasContinued else { return }
+            showDialog = true
         }
     }
 }

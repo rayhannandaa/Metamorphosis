@@ -12,38 +12,31 @@ struct VictoryOverlay: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 1.0, green: 0.91, blue: 0.65),
-                    Color.white
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .opacity(isPresented ? 1 : 0)
-            .animation(.easeInOut(duration: 0.8), value: isPresented)
+            Color.black.opacity(0.78)
+                .ignoresSafeArea()
+                .opacity(isPresented ? 1 : 0)
+                .animation(.easeInOut(duration: 0.8), value: isPresented)
 
             VStack(spacing: 0) {
                 Text("METAMORPHOSIS COMPLETE")
                     .font(.system(size: 34, weight: .bold, design: .serif))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(Color(red: 0.42, green: 0.20, blue: 0.08))
+                    .foregroundStyle(Color(hex: "FFFEF4"))
 
                 Text("You survived, transformed, and escaped the room.")
                     .font(.system(size: 18, design: .serif))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.black.opacity(0.72))
+                    .foregroundStyle(Color(hex: "FFFEF4").opacity(0.85))
                     .padding(.horizontal, 38)
                     .padding(.top, 16)
 
                 Button(action: onPlayAgain) {
                     Text("Play Again")
                         .font(.system(size: 19, weight: .semibold, design: .serif))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color(hex: "151515"))
                         .padding(.horizontal, 30)
                         .padding(.vertical, 12)
-                        .background(Color(red: 0.42, green: 0.20, blue: 0.08))
+                        .background(Color(hex: "FFFEF4"))
                         .clipShape(Capsule())
                 }
                 .padding(.top, 48)

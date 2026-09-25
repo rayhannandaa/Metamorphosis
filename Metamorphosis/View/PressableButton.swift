@@ -23,7 +23,7 @@ struct PressableButton: View {
             .contentShape(Rectangle())
             .offset(y: isPressed ? 5 : 0)
             .animation(.easeOut(duration: 0.08), value: isPressed)
-            .gesture(
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
                         guard !isPressed else { return }

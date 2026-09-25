@@ -2,15 +2,12 @@ import SpriteKit
 import SwiftUI
 
 struct GameView: View {
-    private static let roomConfig = RoomConfig.room
-
-    @State private var scene: RoomScene
-    @State private var sequenceState: GameSequenceState = .introduction
+    @ObservedObject var sceneStore: GameSceneStore
+    @ObservedObject var flowCoordinator: GameFlowCoordinator
     @State private var isIntroDismissing = false
-    @State private var cutsceneOpacity = 0.0
 
-    init() {
-        _scene = State(initialValue: Self.makeScene())
+    private var scene: RoomScene {
+        sceneStore.scene
     }
 
     var body: some View {
@@ -23,39 +20,43 @@ struct GameView: View {
                     .clipped()
                     .id(ObjectIdentifier(scene))
 
-                gameFlowTriggers
+                ZStack {
+                    gameFlowTriggers
 
-                if sequenceState != .cocoonCutscene {
-                    GameplayOverlay(
-                        scene: scene,
-                        isIntroBlockingHUD: sequenceState == .introduction
-                            && !isIntroDismissing,
-                        isStoryDialogBlockingControls: sequenceState.blocksGameplayControls
+                    if flowCoordinator.state != .cocoonCutscene {
+                        GameplayOverlay(
+                            scene: scene,
+                            isIntroBlockingHUD: flowCoordinator.state == .larvaDialogue
+                                && !isIntroDismissing,
+                            isStoryDialogBlockingControls: flowCoordinator.state.blocksGameplayControls
+                        )
+                        .id(ObjectIdentifier(scene))
+                    }
+
+                    sequenceOverlay
+
+                    SurvivalOverlay(
+                        session: scene.session,
+                        onPlayAgain: playAgain
                     )
-                    .id(ObjectIdentifier(scene))
+                    .id(ObjectIdentifier(scene.session))
+
+                    VictoryOverlay(
+                        session: scene.session,
+                        onPlayAgain: playAgain
+                    )
+                    .id(ObjectIdentifier(scene.session))
                 }
-
-                sequenceOverlay
-
-                Color(red: 1.0, green: 0.91, blue: 0.65)
-                    .opacity(sequenceState == .escaping ? 0.72 : 0)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-
-                SurvivalOverlay(
-                    session: scene.session,
-                    onPlayAgain: playAgain
-                )
-                .id(ObjectIdentifier(scene.session))
-
-                VictoryOverlay(
-                    session: scene.session,
-                    onPlayAgain: playAgain
-                )
-                .id(ObjectIdentifier(scene.session))
+                .opacity(showsGameplayInterface ? 1 : 0)
+                .allowsHitTesting(showsGameplayInterface)
             }
         }
         .ignoresSafeArea()
+    }
+
+    private var showsGameplayInterface: Bool {
+        flowCoordinator.state != .loading
+            && flowCoordinator.state != .openingIntro
     }
 
     private var gameFlowTriggers: some View {
@@ -65,7 +66,7 @@ struct GameView: View {
             }
 
             EscapeRequestTrigger(session: scene.session) {
-                sequenceState = .escapeDialogue
+                flowCoordinator.transition(to: .escapeDialogue)
             }
         }
         .id(ObjectIdentifier(scene.session))
@@ -73,8 +74,8 @@ struct GameView: View {
 
     @ViewBuilder
     private var sequenceOverlay: some View {
-        switch sequenceState {
-        case .introduction:
+        switch flowCoordinator.state {
+        case .larvaDialogue:
             DialogSequenceOverlay(
                 sequence: GameDialogCatalog.introduction,
                 onDismissStarted: {
@@ -82,7 +83,7 @@ struct GameView: View {
                 },
                 onDismiss: {
                     isIntroDismissing = false
-                    sequenceState = .playing
+                    flowCoordinator.transition(to: .playing)
                     scene.session.start()
                 }
             )
@@ -91,14 +92,13 @@ struct GameView: View {
             DayTwoCutsceneView {
                 finishDayTwoCutscene()
             }
-            .opacity(cutsceneOpacity)
             .allowsHitTesting(true)
 
         case .butterflyDialogue:
             DialogSequenceOverlay(
                 sequence: GameDialogCatalog.butterflyTransformation
             ) {
-                sequenceState = .playing
+                flowCoordinator.transition(to: .playing)
                 scene.session.start()
             }
 
@@ -107,7 +107,7 @@ struct GameView: View {
                 beginWindowEscape()
             }
 
-        case .playing, .escaping:
+        case .loading, .openingIntro, .playing, .escaping:
             EmptyView()
         }
     }
@@ -116,53 +116,35 @@ struct GameView: View {
         scene.stopAllMovement()
         scene.session.pause()
         scene.setPlayerVisible(false)
-        sequenceState = .cocoonCutscene
-
-        withAnimation(.easeInOut(duration: 2.0)) {
-            cutsceneOpacity = 1.0
-        }
+        scene.showCocoonCutscene()
+        flowCoordinator.transition(to: .cocoonCutscene)
     }
 
     private func finishDayTwoCutscene() {
         scene.session.skipToDay(3)
         scene.setPlayerVisible(true)
-
-        withAnimation(.easeInOut(duration: 2.5)) {
-            cutsceneOpacity = 0.0
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            sequenceState = .butterflyDialogue
+        scene.hideCocoonCutscene {
+            flowCoordinator.transition(to: .butterflyDialogue)
         }
     }
 
     private func beginWindowEscape() {
         scene.session.beginWindowEscape()
 
-        withAnimation(.easeIn(duration: 1.6)) {
-            sequenceState = .escaping
-        }
+        flowCoordinator.transition(to: .escaping)
 
         scene.performWindowEscape {
             scene.session.completeWindowEscape()
-            withAnimation(.easeOut(duration: 0.8)) {
-                sequenceState = .playing
-            }
+            flowCoordinator.transition(to: .playing)
         }
     }
 
     private func playAgain() {
-        let newScene = Self.makeScene()
+        let newScene = sceneStore.makeRestartScene()
 
         isIntroDismissing = false
-        cutsceneOpacity = 0
-        sequenceState = .playing
-        scene = newScene
+        flowCoordinator.transition(to: .playing)
         newScene.session.start()
-    }
-
-    private static func makeScene() -> RoomScene {
-        RoomScene(config: roomConfig, zoomScale: 600 / 437)
     }
 }
 
@@ -170,5 +152,8 @@ struct GameView: View {
     traits: .fixedLayout(width: 402, height: 874),
     .portrait
 ) {
-    GameView()
+    GameView(
+        sceneStore: GameSceneStore(),
+        flowCoordinator: GameFlowCoordinator()
+    )
 }

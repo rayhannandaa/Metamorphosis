@@ -11,7 +11,7 @@ struct GameStatusOverlay: View {
     @ObservedObject var session: GameSessionController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(session.displayTime)
                     .monospacedDigit()
@@ -22,23 +22,31 @@ struct GameStatusOverlay: View {
 
                 Text(phaseEmoji + " " + session.phase.displayName)
             }
-            .font(.caption.bold())
-            .foregroundColor(.white)
+            .font(.system(size: 14, weight: .semibold, design: .serif))
+            .foregroundStyle(Color(hex: "FFFEF4"))
 
-            barRow(label: "Stress", value: session.stressValue, color: .red)
+            barRow(
+                label: "Stress",
+                value: session.stressValue,
+                color: Color(hex: "DE4B29")
+            )
 
             if session.phase == .worm {
-                barRow(label: "Hunger", value: session.hungerValue, color: .green)
+                barRow(
+                    label: "Hunger",
+                    value: session.hungerValue,
+                    color: Color(hex: "C2D83F")
+                )
             }
 
             if session.isGameComplete {
                 Text("🦋 Metamorphosis complete")
-                    .font(.caption2.bold())
-                    .foregroundColor(.yellow)
+                    .font(.system(size: 12, weight: .semibold, design: .serif))
+                    .foregroundStyle(Color(hex: "FFFEF4"))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(Color.black.opacity(0.35))
         .cornerRadius(12)
         // Safe-area aware placement: lower than the iPhone Dynamic Island.
@@ -57,15 +65,15 @@ struct GameStatusOverlay: View {
     }
 
     private func barRow(label: String, value: CGFloat, color: Color) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Text(label)
-                .font(.caption2)
-                .foregroundColor(.white)
-                .frame(width: 46, alignment: .leading)
+                .font(.system(size: 13, weight: .medium, design: .serif))
+                .foregroundStyle(Color(hex: "FFFEF4"))
+                .frame(width: 56, alignment: .leading)
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.15))
+                    Capsule().fill(Color(hex: "FFFEF4").opacity(0.18))
                     Capsule()
                         .fill(color)
                         .frame(
@@ -74,7 +82,7 @@ struct GameStatusOverlay: View {
                         )
                 }
             }
-            .frame(width: 120, height: 10)
+            .frame(width: 160, height: 14)
         }
     }
 }

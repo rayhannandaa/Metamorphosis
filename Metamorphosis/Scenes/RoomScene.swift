@@ -14,6 +14,7 @@ final class RoomScene: SKScene {
     private var lastUpdateTime: TimeInterval?
     private var isEscaping = false
     private var escapeController: EscapeController?
+    private var cocoonCutsceneController: CocoonCutsceneController?
 
     private lazy var worldController = RoomWorldController(
         scene: self,
@@ -61,6 +62,12 @@ final class RoomScene: SKScene {
     override func didMove(to view: SKView) {
         buildWorldIfNeeded()
         setupCameraIfNeeded(in: view)
+    }
+
+    /// Builds the scene graph before its SKView is mounted, keeping texture
+    /// and node construction out of the visible intro-to-game transition.
+    func prepareForPresentation() {
+        buildWorldIfNeeded()
     }
 
     private func buildWorldIfNeeded() {
@@ -173,6 +180,19 @@ final class RoomScene: SKScene {
         playerNode.isHidden = !isVisible
     }
 
+    func setInitialContentVisible(_ isVisible: Bool) {
+        setPlayerVisible(isVisible)
+        session.setFoodVisible(isVisible)
+    }
+
+    func showCocoonCutscene() {
+        cocoonCutsceneController?.show()
+    }
+
+    func hideCocoonCutscene(completion: @escaping () -> Void) {
+        cocoonCutsceneController?.hide(completion: completion)
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
@@ -194,6 +214,18 @@ final class RoomScene: SKScene {
         )
         addChild(cameraNode)
         camera = cameraNode
+
+        let baseScale = max(
+            view.bounds.width / config.sceneSize.width,
+            view.bounds.height / config.sceneSize.height
+        )
+        cocoonCutsceneController = CocoonCutsceneController(
+            cameraNode: cameraNode,
+            overlaySize: CGSize(
+                width: view.bounds.width / baseScale,
+                height: view.bounds.height / baseScale
+            )
+        )
     }
 
     private func clampedCameraPosition(

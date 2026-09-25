@@ -18,6 +18,8 @@ import SpriteKit
 import Combine
 
 final class GameSessionController: NSObject, ObservableObject, SKPhysicsContactDelegate {
+    var onSurvivalWarningEntered: (() -> Void)?
+
     @Published private(set) var day: Int = 1
     @Published private(set) var totalDays: Int = GameConfig.totalDemoDays
     @Published private(set) var phase: GamePhase = .worm
@@ -43,6 +45,8 @@ final class GameSessionController: NSObject, ObservableObject, SKPhysicsContactD
     private var dayNight: DayNightController?
     private var foodNodes: [FoodNode] = []
     private var hasAttached = false
+    private var hasSpawnedInitialFood = false
+    private var isInitialFoodRevealRequested = false
     private var isRunning = false
     private var hudRefreshAccumulator: TimeInterval = 0
     private var pendingStressValue: CGFloat = 0
@@ -99,13 +103,33 @@ final class GameSessionController: NSObject, ObservableObject, SKPhysicsContactD
         pendingHungerValue = hunger.value
         displayTime = clock.displayTime
 
-        spawnFood(count: GameConfig.foodPerDay)
+        spawnInitialFoodIfNeeded()
     }
 
     /// Starts the day/night clock and survival systems after the intro ends.
     func start() {
         guard !isGameOver else { return }
         isRunning = true
+        spawnInitialFoodIfNeeded()
+    }
+
+    /// Reveals food for the larva introduction without starting survival systems.
+    func revealInitialFood() {
+        isInitialFoodRevealRequested = true
+        spawnInitialFoodIfNeeded()
+    }
+
+    func setFoodVisible(_ isVisible: Bool) {
+        foodNodes.forEach { $0.isHidden = !isVisible }
+    }
+
+    private func spawnInitialFoodIfNeeded() {
+        guard hasAttached,
+              !hasSpawnedInitialFood,
+              isRunning || isInitialFoodRevealRequested
+        else { return }
+        hasSpawnedInitialFood = true
+        spawnFood(count: GameConfig.foodPerDay)
     }
 
     /// Freezes the clock and survival systems during a full-screen cutscene.
@@ -210,8 +234,12 @@ final class GameSessionController: NSObject, ObservableObject, SKPhysicsContactD
             deltaTime: deltaTime
         )
 
+        let enteredSurvivalWarning = !isSurvivalWarning && status.isWarning
         if isSurvivalWarning != status.isWarning {
             isSurvivalWarning = status.isWarning
+        }
+        if enteredSurvivalWarning {
+            onSurvivalWarningEntered?()
         }
         if isDeathCountdownActive != status.isCountdownActive {
             isDeathCountdownActive = status.isCountdownActive
