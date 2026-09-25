@@ -4,67 +4,209 @@ import Foundation
 
 struct GameView: View {
     private static let roomConfig = RoomConfig.room
-    private let scene = RoomScene(config: roomConfig, zoomScale: 600 / 437)
+    @State private var scene: RoomScene
+    
     @State private var showIntroMonologue = true
+    @State private var isIntroDismissing = false
+    
+    // Smooth Cutscene states
+    @State private var isShowingCutscene: Bool = false
+    @State private var cutsceneOpacity: Double = 0.0
 
+    init() {
+        _scene = State(initialValue: Self.makeScene())
+    }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color(hex: "131313")
 
+                // ALWAYS render the game in the background so it can fade in/out
                 SpriteView(scene: scene, options: [.allowsTransparency])
-                    .frame(
-                        width: geometry.size.width,
-                        height: geometry.size.height
-                    )
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipped()
+                    .id(ObjectIdentifier(scene))
 
-                HUDView(scene: scene)
-                ASARYUNHUDOverlay(session: scene.asaryunSession)
+                DayTwoCutsceneTrigger(session: scene.asaryunSession) {
+                    beginDayTwoCutscene()
+                }
+                .id(ObjectIdentifier(scene.asaryunSession))
+
+                if !isShowingCutscene {
+                    GameplayOverlay(
+                        scene: scene,
+                        isIntroBlockingHUD: showIntroMonologue && !isIntroDismissing
+                    )
+                    .id(ObjectIdentifier(scene))
+                }
                 
-                
-                MonologueObserver(manager: scene.interactableManager)
                 if showIntroMonologue {
-                        GameIntroMonologueOverlay(
-                            text: "What happened, why did I suddenly shrink",
-                            onDismiss: {
-                                showIntroMonologue = false
-                            }
-                        )
-                    }
+                    GameIntroMonologueOverlay(
+                        text: "What happened, why did I suddenly shrink",
+                        onDismissStarted: {
+                            isIntroDismissing = true
+                        },
+                        onDismiss: {
+                            showIntroMonologue = false
+                            isIntroDismissing = false
+                            scene.asaryunSession.start()
+                        }
+                    )
+                }
                 
-//                if let monologue = scene.interactableManager.activeMonologue {
-//                    MonologueOverlayView(
-//                    objectName: monologue.objectName,
-//                    monologueText: monologue.text,
-//                    onDismiss: { scene.interactableManager.dismissMonologue() }
-//                    )
-//                }
+                // THE CINEMATIC FADE OVERLAY
+                if isShowingCutscene {
+                    DayTwoCutsceneView {
+                        finishDayTwoCutscene()
+                    }
+                    .opacity(cutsceneOpacity)
+                    .allowsHitTesting(true)
+                }
+
+                ASARYUNSurvivalOverlay(
+                    session: scene.asaryunSession,
+                    onPlayAgain: playAgain
+                )
+                .id(ObjectIdentifier(scene.asaryunSession))
             }
         }
         .ignoresSafeArea()
+    }
+
+    private func beginDayTwoCutscene() {
+        scene.asaryunSession.pause()
+        scene.setPlayerVisible(false)
+        isShowingCutscene = true
+
+        withAnimation(.easeInOut(duration: 2.0)) {
+            cutsceneOpacity = 1.0
+        }
+    }
+
+    private func finishDayTwoCutscene() {
+        scene.asaryunSession.skipToDay(3)
+        scene.setPlayerVisible(true)
+
+        withAnimation(.easeInOut(duration: 2.5)) {
+            cutsceneOpacity = 0.0
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            isShowingCutscene = false
+            scene.asaryunSession.start()
+        }
+    }
+
+    private func playAgain() {
+        let newScene = Self.makeScene()
+
+        showIntroMonologue = false
+        isIntroDismissing = false
+        isShowingCutscene = false
+        cutsceneOpacity = 0
+        scene = newScene
+        newScene.asaryunSession.start()
+    }
+
+    private static func makeScene() -> RoomScene {
+        RoomScene(config: roomConfig, zoomScale: 600 / 437)
+    }
+}
+
+private struct DayTwoCutsceneTrigger: View {
+    @ObservedObject var session: ASARYUNGameSessionController
+    let onDayTwo: () -> Void
+
+    @State private var hasTriggered = false
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .onChange(of: session.day, initial: true) { _, newDay in
+                guard newDay == 2, !hasTriggered else { return }
+                hasTriggered = true
+                onDayTwo()
+            }
     }
 }
 
 private struct GameIntroMonologueOverlay: View {
     let text: String
+    let onDismissStarted: () -> Void
     let onDismiss: () -> Void
+    @State private var isPresented = false
+
+    private let animationDuration = 0.3
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                    .opacity(isPresented ? 0.45 : 0)
+                    .ignoresSafeArea()
+
+                ASARYUNDialogBubble(
+                    text: text,
+                    hint: "Tap to continue"
+                )
+                .offset(y: isPresented ? 0 : geometry.size.height)
+            }
+        }
+        .contentShape(Rectangle())
+        .animation(.easeOut(duration: animationDuration), value: isPresented)
+        .onAppear {
+            isPresented = true
+        }
+        .onTapGesture {
+            guard isPresented else { return }
+            onDismissStarted()
+            isPresented = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
+                onDismiss()
+            }
+        }
+    }
+}
+
+private struct GameplayOverlay: View {
+    let scene: RoomScene
+    let isIntroBlockingHUD: Bool
+    @ObservedObject private var interactableManager: InteractableManager
+    @State private var isMonologueDismissing = false
+
+    init(scene: RoomScene, isIntroBlockingHUD: Bool) {
+        self.scene = scene
+        self.isIntroBlockingHUD = isIntroBlockingHUD
+        _interactableManager = ObservedObject(
+            wrappedValue: scene.interactableManager
+        )
+    }
+
+    private var areControlsVisible: Bool {
+        !isIntroBlockingHUD && (
+            interactableManager.activeMonologue == nil || isMonologueDismissing
+        )
+    }
 
     var body: some View {
         ZStack {
-            Color.black
-                .opacity(0.45)
-                .ignoresSafeArea()
+            HUDView(scene: scene)
+                .opacity(areControlsVisible ? 1 : 0)
+                .allowsHitTesting(areControlsVisible)
+                .animation(.easeInOut(duration: 0.2), value: areControlsVisible)
 
-            ASARYUNDialogBubble(
-                text: text,
-                hint: "Tap to continue"
+            ASARYUNHUDOverlay(session: scene.asaryunSession)
+                .opacity(isIntroBlockingHUD ? 0 : 1)
+                .animation(.easeInOut(duration: 0.2), value: isIntroBlockingHUD)
+
+            MonologueObserver(
+                manager: interactableManager,
+                onDismissalStateChange: { isDismissing in
+                    isMonologueDismissing = isDismissing
+                }
             )
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onDismiss()
         }
     }
 }
@@ -88,18 +230,22 @@ private struct HUDView: View {
                             height: button.size.height * scaleY
                         ),
                         onPress: {
-                            // Jika tombol Action yang ditekan, panggil interaksi
                             if button.name == "ActionButton" {
                                 scene.interactableManager.triggerInteraction(
                                     phase: scene.asaryunSession.phase,
                                     isDaytime: scene.asaryunSession.isDaytime
                                 )
                             } else {
-                                // Jika tombol arah yang ditekan, karakter berjalan
                                 setDirection(button.direction, isActive: true)
                             }
                         },
-                        onRelease: { setDirection(button.direction, isActive: false) }
+                        onRelease: {
+                            setDirection(button.direction, isActive: false)
+                        },
+                        onQuickTap: {
+                            guard let direction = button.direction else { return }
+                            scene.advanceWormStepFrame(direction)
+                        }
                     )
                     .position(
                         x: button.position.x * scaleX,
@@ -128,8 +274,6 @@ private struct HUDButtonConfig {
     let position: CGPoint
     let direction: MovementDirection?
 }
-
-
 
 private extension Array where Element == HUDButtonConfig {
     static let roomHUD: [HUDButtonConfig] = [
@@ -176,12 +320,14 @@ private struct PressableButton: View {
     let size: CGSize
     var onPress: () -> Void = {}
     var onRelease: () -> Void = {}
+    var onQuickTap: () -> Void = {}
 
     @State private var isPressed = false
     @State private var pressBeganAt: Date?
     @State private var pressGeneration = 0
 
     private let minimumPressDuration: TimeInterval = 0.08
+    private let quickTapMaximumDuration: TimeInterval = 0.18
 
     var body: some View {
         Image(assetName)
@@ -201,18 +347,22 @@ private struct PressableButton: View {
                         onPress()
                     }
                     .onEnded { _ in
-                        onRelease()
-                        finishVisualPress()
+                        finishPress()
                     }
             )
     }
 
-    private func finishVisualPress() {
+    private func finishPress() {
         let elapsed = pressBeganAt.map { Date().timeIntervalSince($0) } ?? minimumPressDuration
         let remainingDuration = max(0, minimumPressDuration - elapsed)
         let completedGeneration = pressGeneration
+        let isQuickTap = elapsed <= quickTapMaximumDuration
 
         guard remainingDuration > 0 else {
+            onRelease()
+            if isQuickTap {
+                onQuickTap()
+            }
             isPressed = false
             pressBeganAt = nil
             return
@@ -220,6 +370,10 @@ private struct PressableButton: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + remainingDuration) {
             guard pressGeneration == completedGeneration else { return }
+            onRelease()
+            if isQuickTap {
+                onQuickTap()
+            }
             isPressed = false
             pressBeganAt = nil
         }
@@ -233,16 +387,22 @@ private struct PressableButton: View {
     GameView()
 }
 
-
 struct MonologueObserver: View {
     @ObservedObject var manager: InteractableManager
+    let onDismissalStateChange: (Bool) -> Void
     
     var body: some View {
         if let monologue = manager.activeMonologue {
             MonologueOverlayView(
                 objectName: monologue.objectName,
                 monologueText: monologue.text,
-                onDismiss: { manager.dismissMonologue() }
+                onDismissStarted: {
+                    onDismissalStateChange(true)
+                },
+                onDismiss: {
+                    manager.dismissMonologue()
+                    onDismissalStateChange(false)
+                }
             )
         }
     }

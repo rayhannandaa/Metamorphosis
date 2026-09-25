@@ -15,8 +15,8 @@ enum ASARYUNGameConfig {
     /// The complete in-game day + night cycle is 3 minutes.
     /// Day: 06:00–18:00 (90 seconds).
     /// Night: 19:00–00:00 (90 seconds).
-    static let dayDuration: TimeInterval = 90
-    static let nightDuration: TimeInterval = 90
+    static let dayDuration: TimeInterval = 30
+    static let nightDuration: TimeInterval = 30
     static var cycleDuration: TimeInterval { dayDuration + nightDuration }
 
     // MARK: In-game clock
@@ -56,8 +56,13 @@ enum ASARYUNGameConfig {
     static let stressIncreasePerSunHit: CGFloat = 18
     static let stressSunIntervalSeconds: TimeInterval = 1.25
     static let stressDecayPerSecond: CGFloat = 1.5
-    static let hungerDepletionPerSecond: CGFloat = (maxBarValue / 2) / CGFloat(cycleDuration)
+    static let nighttimeStressDecayPerSecond: CGFloat = 2.25
+    static let hungerGracePeriod: TimeInterval = 5
+    static let hungerDepletionPerSecond: CGFloat = 1
     static let hungerRestoreOnFood: CGFloat = 30
+    static let stressWarningThreshold: CGFloat = 95
+    static let hungerWarningThreshold: CGFloat = 5
+    static let deathDelay: TimeInterval = 5
     static let foodPerDay = 4
     static let foodSpawnClearance: CGFloat = 6
     static let foodSpawnMaxAttempts = 100

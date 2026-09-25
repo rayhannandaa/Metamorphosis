@@ -1,8 +1,6 @@
 import SpriteKit
 import SwiftUI
 
-
-
 final class RoomScene: SKScene {
     let interactableManager = InteractableManager()
 
@@ -39,7 +37,7 @@ final class RoomScene: SKScene {
 
     init(
         config: RoomConfig,
-        playerConfig: PlayerConfig = .centaur,
+        playerConfig: PlayerConfig = .player, // <--- CHANGED FROM .centaur
         zoomScale: CGFloat = 1,
         initialCameraPosition: CGPoint? = nil
     ) {
@@ -99,7 +97,11 @@ final class RoomScene: SKScene {
         defer { lastUpdateTime = currentTime }
         guard let lastUpdateTime else { return }
         let deltaTime = currentTime - lastUpdateTime
-            movementController.update(deltaTime: deltaTime)
+            if asaryunSession.isGameOver {
+                movementController.stop()
+            } else {
+                movementController.update(deltaTime: deltaTime)
+            }
             asaryunSession.update(deltaTime: deltaTime)
         
         if let view = self.view {
@@ -111,8 +113,19 @@ final class RoomScene: SKScene {
     }
     
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
-        guard asaryunSession.phase == .worm || !isActive else { return }
+        // The worm crawls and the butterfly flies; only the pupa is immobile.
+        guard !asaryunSession.isGameOver else { return }
+        guard asaryunSession.phase != .pupa || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
+    }
+
+    func advanceWormStepFrame(_ direction: MovementDirection) {
+        guard !asaryunSession.isGameOver else { return }
+        playerNode.advanceWormStepFrame(facing: direction)
+    }
+
+    func setPlayerVisible(_ isVisible: Bool) {
+        playerNode.isHidden = !isVisible
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -200,12 +213,6 @@ private struct RoomScenePreview: View {
             .background(Color.black)
     }
 }
-
-
-
-
-
-
 
 #Preview(
     traits: .fixedLayout(width: 500, height: 800)

@@ -23,15 +23,16 @@ struct PlayerConfig {
 }
 
 extension PlayerConfig {
-    static let centaur = PlayerConfig(
-        assetPrefix: "Centaur",
-        frameCount: 3,
-        idleFrameIndex: 1,
-        size: CGSize(width: 64, height: 85), // native sprite dimensions per README
+    // Replaced 'centaur' with the proper 'player' configuration
+    static let player = PlayerConfig(
+        assetPrefix: "Worm",
+        frameCount: 2, // Worm only uses 2 frames
+        idleFrameIndex: 0,
+        size: CGSize(width: 64, height: 64),
         initialPosition: CGPoint(x: 80, y: 567.55),
         initialFacing: .down,
         speed: 140,
         zPosition: 2.5,
-        frameDuration: 0.15 // matches the sheet's own 150ms preview delay
+        frameDuration: 0.2
     )
 }

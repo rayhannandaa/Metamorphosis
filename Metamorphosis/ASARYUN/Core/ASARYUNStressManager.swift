@@ -20,9 +20,9 @@ final class ASARYUNStressManager {
         onChange?(value)
     }
 
-    func update(deltaTime: TimeInterval) {
+    func update(deltaTime: TimeInterval, decayPerSecond: CGFloat) {
         guard value > 0 else { return }
-        value = max(0, value - ASARYUNGameConfig.stressDecayPerSecond * CGFloat(deltaTime))
+        value = max(0, value - decayPerSecond * CGFloat(deltaTime))
         onChange?(value)
     }
 

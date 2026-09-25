@@ -3,29 +3,59 @@
 //  Metamorphosis
 //
 
+import Foundation
 import SwiftUI
 
 /// Overlay displaying the character's monologue when an object is interacted with.
 struct MonologueOverlayView: View {
     let objectName: String
     let monologueText: String
+    let onDismissStarted: () -> Void
     let onDismiss: () -> Void
+    @State private var isPresented = false
+
+    private let animationDuration = 0.3
+
+    init(
+        objectName: String,
+        monologueText: String,
+        onDismissStarted: @escaping () -> Void = {},
+        onDismiss: @escaping () -> Void
+    ) {
+        self.objectName = objectName
+        self.monologueText = monologueText
+        self.onDismissStarted = onDismissStarted
+        self.onDismiss = onDismiss
+    }
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                    .opacity(isPresented ? 0.4 : 0)
+                    .ignoresSafeArea()
 
-            ASARYUNDialogBubble(
-                heading: objectName,
-                text: monologueText,
-                hint: "Tap to dismiss"
-            )
+                ASARYUNDialogBubble(
+                    heading: objectName,
+                    text: monologueText,
+                    hint: "Tap to dismiss"
+                )
+                .offset(y: isPresented ? 0 : geometry.size.height)
+            }
         }
         .contentShape(Rectangle())
-        .onTapGesture(perform: onDismiss)
-        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-        .animation(.easeOut(duration: 0.2), value: monologueText)
+        .animation(.easeOut(duration: animationDuration), value: isPresented)
+        .onAppear {
+            isPresented = true
+        }
+        .onTapGesture {
+            guard isPresented else { return }
+            onDismissStarted()
+            isPresented = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
+                onDismiss()
+            }
+        }
     }
 }
 
