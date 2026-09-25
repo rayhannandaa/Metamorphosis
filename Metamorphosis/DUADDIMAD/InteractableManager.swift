@@ -12,6 +12,7 @@ import Combine
 final class InteractableManager: ObservableObject {
     @Published private(set) var activeMonologue: (objectName: String, text: String)? = nil
     @Published private(set) var nearbyObjectName: String? = nil
+    var onButterflyWindowInteraction: (() -> Void)?
 
     private(set) var interactableNodes: [InteractableObjectNode] = []
     private(set) var currentHighlightedNode: InteractableObjectNode?
@@ -105,6 +106,11 @@ final class InteractableManager: ObservableObject {
         phase: ASARYUNGamePhase,
         isDaytime: Bool
     ) -> String? {
+        if node.objectType == .window, phase == .butterfly {
+            onButterflyWindowInteraction?()
+            return nil
+        }
+
         guard let monologue = node.triggerMonologue(for: phase, isDaytime: isDaytime) else {
             return nil
         }
@@ -116,6 +122,12 @@ final class InteractableManager: ObservableObject {
     /// Dismisses the currently displayed monologue.
     func dismissMonologue() {
         activeMonologue = nil
+    }
+
+    func clearCurrentInteraction() {
+        currentHighlightedNode?.setHighlighted(false)
+        currentHighlightedNode = nil
+        nearbyObjectName = nil
     }
 
     /// Returns the real room sprite's center for the development test harness.

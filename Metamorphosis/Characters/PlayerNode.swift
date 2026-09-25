@@ -97,6 +97,11 @@ final class PlayerNode: SKSpriteNode {
         applyTextureFittingConfiguredSize(texture)
     }
 
+    func beginScriptedFlight(facing: MovementDirection) {
+        removeAction(forKey: "deferredWalkStop")
+        updateAnimation(facing: facing, isWalking: true, forceUpdate: true)
+    }
+
     func playEatingAnimation() {
         guard currentPhase == .worm,
               !isEating,

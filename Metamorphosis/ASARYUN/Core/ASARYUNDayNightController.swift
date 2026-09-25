@@ -83,4 +83,8 @@ final class ASARYUNDayNightController {
     func hideSunRay() {
         sunRay.hide()
     }
+
+    func isPointInSunlight(_ scenePoint: CGPoint) -> Bool {
+        sunRay.containsScenePoint(scenePoint)
+    }
 }

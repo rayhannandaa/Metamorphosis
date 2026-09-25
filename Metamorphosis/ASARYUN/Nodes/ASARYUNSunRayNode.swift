@@ -87,7 +87,6 @@ final class ASARYUNSunRayNode: SKShapeNode {
 
     func show() {
         isLightActive = true
-        physicsBody?.categoryBitMask = ASARYUNPhysicsCategory.sunRay
         guard alpha < ASARYUNGameConfig.sunRayAlpha else { return }
         run(
             .fadeAlpha(
@@ -100,9 +99,17 @@ final class ASARYUNSunRayNode: SKShapeNode {
 
     func hide() {
         isLightActive = false
-        physicsBody?.categoryBitMask = 0
         removeAction(forKey: "ASARYUNSunRayFade")
         run(.fadeOut(withDuration: 0.5), withKey: "ASARYUNSunRayFade")
+    }
+
+    /// Uses the ray's current visual path rather than physics contacts. The
+    /// path changes during every sweep frame, so this always matches what the
+    /// player can actually see on screen.
+    func containsScenePoint(_ scenePoint: CGPoint) -> Bool {
+        guard isLightActive, let parent, let path else { return false }
+        let localPoint = convert(scenePoint, from: parent)
+        return path.contains(localPoint)
     }
 
     private func updateGeometry(bottomOffset: CGFloat) {
@@ -135,35 +142,5 @@ final class ASARYUNSunRayNode: SKShapeNode {
         path = visualPath
         visualShape.path = visualPath
 
-        // SpriteKit requires a convex polygon for physics. Five points along
-        // the curved cap closely match the visible half-ellipse while keeping
-        // the body safely below the engine's vertex limit.
-        let diagonalFactor = CGFloat(0.5).squareRoot()
-        let physicsPath = CGMutablePath()
-        physicsPath.move(to: topLeft)
-        physicsPath.addLine(to: topRight)
-        physicsPath.addLine(to: bottomRight)
-        physicsPath.addLine(to: CGPoint(
-            x: bottomOffset + (bottomWidth / 2) * diagonalFactor,
-            y: -rayHeight - bottomCurveDepth * diagonalFactor
-        ))
-        physicsPath.addLine(to: CGPoint(
-            x: bottomOffset,
-            y: -rayHeight - bottomCurveDepth
-        ))
-        physicsPath.addLine(to: CGPoint(
-            x: bottomOffset - (bottomWidth / 2) * diagonalFactor,
-            y: -rayHeight - bottomCurveDepth * diagonalFactor
-        ))
-        physicsPath.addLine(to: bottomLeft)
-        physicsPath.closeSubpath()
-
-        let body = SKPhysicsBody(polygonFrom: physicsPath)
-        body.isDynamic = false
-        body.affectedByGravity = false
-        body.categoryBitMask = isLightActive ? ASARYUNPhysicsCategory.sunRay : 0
-        body.contactTestBitMask = ASARYUNPhysicsCategory.player
-        body.collisionBitMask = 0
-        physicsBody = body
     }
 }

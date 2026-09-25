@@ -35,6 +35,8 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     @Published private(set) var isDeathCountdownActive: Bool = false
     @Published private(set) var isGameOver: Bool = false
     @Published private(set) var deathCause: ASARYUNDeathCause?
+    @Published private(set) var isEscapeRequested: Bool = false
+    @Published private(set) var isVictory: Bool = false
 
     private let clock = ASARYUNGameClock()
     private let stress = ASARYUNStressManager()
@@ -52,7 +54,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     private var pendingHungerValue: CGFloat = ASARYUNGameConfig.initialHungerValue
     private var isFoodPlacementValid: ((CGPoint, CGSize) -> Bool)?
 
-    private var sunContactCount = 0
+    private var isPlayerInSunlight = false
     private var sunExposureTimer: TimeInterval = 0
 
     func attach(
@@ -78,7 +80,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         body.affectedByGravity = false
         body.allowsRotation = false
         body.categoryBitMask = ASARYUNPhysicsCategory.player
-        body.contactTestBitMask = ASARYUNPhysicsCategory.sunRay | ASARYUNPhysicsCategory.food
+        body.contactTestBitMask = ASARYUNPhysicsCategory.food
         body.collisionBitMask = 0
         playerNode.physicsBody = body
 
@@ -93,7 +95,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         clock.onSunRayTick = { [weak self] index in self?.handleSunRayTick(index: index) }
         clock.onPhaseChange = { [weak self] phase in self?.handlePhaseChange(phase) }
         clock.onNewDay = { [weak self] day in self?.handleNewDay(day) }
-        clock.onGameComplete = { [weak self] in self?.isGameComplete = true }
+        clock.onGameComplete = { [weak self] in self?.pause() }
 
         stress.onChange = { [weak self] value in self?.pendingStressValue = value }
         hunger.onChange = { [weak self] value in self?.pendingHungerValue = value }
@@ -116,17 +118,37 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         isRunning = false
     }
 
+    func requestWindowEscape() {
+        guard phase == .butterfly, !isGameOver, !isVictory, !isEscapeRequested else { return }
+        pause()
+        isEscapeRequested = true
+    }
+
+    func beginWindowEscape() {
+        guard isEscapeRequested, !isVictory else { return }
+        isEscapeRequested = false
+        pause()
+    }
+
+    func completeWindowEscape() {
+        isEscapeRequested = false
+        isGameComplete = true
+        isVictory = true
+        pause()
+    }
+
     func update(deltaTime: TimeInterval) {
         guard isRunning, hasAttached, deltaTime.isFinite, deltaTime > 0 else { return }
 
         clock.update(deltaTime: deltaTime)
-        updateStress(deltaTime: deltaTime)
         if clock.currentPhase == .worm {
-            hunger.update(deltaTime: deltaTime)
             updateSunExposure(deltaTime: deltaTime)
+            hunger.update(deltaTime: deltaTime)
         } else {
+            isPlayerInSunlight = false
             sunExposureTimer = 0
         }
+        updateStress(deltaTime: deltaTime)
 
         updateDeathState(deltaTime: deltaTime)
 
@@ -150,10 +172,22 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     }
 
     private func updateSunExposure(deltaTime: TimeInterval) {
-        guard sunContactCount > 0 else {
+        let playerPosition = playerNode?.position ?? .zero
+        let isCurrentlyExposed = clock.isDaytime
+            && (dayNight?.isPointInSunlight(playerPosition) ?? false)
+
+        guard isCurrentlyExposed else {
+            isPlayerInSunlight = false
             sunExposureTimer = 0
             return
         }
+
+        if !isPlayerInSunlight {
+            isPlayerInSunlight = true
+            sunExposureTimer = 0
+            stress.registerSunHit()
+        }
+
         sunExposureTimer += deltaTime
         while sunExposureTimer >= ASARYUNGameConfig.stressSunIntervalSeconds {
             sunExposureTimer -= ASARYUNGameConfig.stressSunIntervalSeconds
@@ -162,8 +196,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     }
 
     private func updateStress(deltaTime: TimeInterval) {
-        let isExposedToSunlight = clock.isDaytime && sunContactCount > 0
-        guard !isExposedToSunlight else { return }
+        guard !isPlayerInSunlight else { return }
 
         let decayRate = clock.isDaytime
             ? ASARYUNGameConfig.stressDecayPerSecond
@@ -204,7 +237,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         displayTime = clock.displayTime
         dayNight?.setDaytime(isDay)
         if !isDay {
-            sunContactCount = 0
+            isPlayerInSunlight = false
             sunExposureTimer = 0
         }
     }
@@ -276,15 +309,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     func didBegin(_ contact: SKPhysicsContact) {
         let categories = contact.bodyA.categoryBitMask | contact.bodyB.categoryBitMask
 
-        if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.sunRay) {
-            guard phase == .worm else { return }
-            let isBeginningExposure = sunContactCount == 0
-            sunContactCount += 1
-            if isBeginningExposure {
-                sunExposureTimer = 0
-                stress.registerSunHit()
-            }
-        } else if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.food) {
+        if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.food) {
             let foodBody = contact.bodyA.categoryBitMask == ASARYUNPhysicsCategory.food ? contact.bodyA : contact.bodyB
             guard let foodNode = foodBody.node as? ASARYUNFoodNode else { return }
             if phase == .worm, let player = playerNode as? PlayerNode {
@@ -300,9 +325,4 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         }
     }
 
-    func didEnd(_ contact: SKPhysicsContact) {
-        let categories = contact.bodyA.categoryBitMask | contact.bodyB.categoryBitMask
-        guard categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.sunRay) else { return }
-        sunContactCount = max(0, sunContactCount - 1)
-    }
 }
