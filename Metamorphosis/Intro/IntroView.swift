@@ -1,5 +1,3 @@
-import AVFoundation
-import SpriteKit
 import SwiftUI
 
 struct IntroView: View {
@@ -16,59 +14,27 @@ struct IntroView: View {
     // MARK: - Properties
 
     private let onFinished: () -> Void
-    private let scene: RoomScene
 
     @State private var currentMonologueIndex = 0
     @State private var isDarkSequence = false
     @State private var isFinalBlack = false
     @State private var hasFinished = false
-    @State private var thunderPlayer: AVAudioPlayer?
     @State private var isRoomBreathing = false
     @State private var isDialogVisible = true
     @State private var isTransitionDarkened = false
     @State private var isTransitioning = false
+    @State private var isTextComplete = false
+    @State private var revealRequest = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    // MARK: - Init
 
     init(onFinished: @escaping () -> Void) {
         self.onFinished = onFinished
-
-        self.scene = RoomScene(
-            config: .room,
-            zoomScale: 600 / 437
-        )
-
-        self.scene.isPaused = true
-        self.scene.setPlayerVisible(false)
     }
 
     // MARK: - Body
 
     var body: some View {
         ZStack {
-
-            // Base black background
-            Color.black
-                .ignoresSafeArea()
-
-            // Room background
-            SpriteView(
-                scene: scene,
-                options: [.allowsTransparency]
-            )
-            .ignoresSafeArea()
-            .opacity(roomVisibility)
-            .scaleEffect(
-                roomScale
-            )
-            .animation(
-                reduceMotion
-                    ? nil
-                    : .easeInOut(duration: 4.5).repeatForever(autoreverses: true),
-                value: isRoomBreathing
-            )
-
             // Opening room treatment remains mounted while it fades away.
             Color.black
                 .opacity(0.38)
@@ -88,46 +54,41 @@ struct IntroView: View {
             )
             .opacity(isFinalBlack ? 0 : 1)
 
-            Color.black
+            Color(hex: "080808")
                 .ignoresSafeArea()
                 .opacity(isFinalBlack ? 1 : 0)
 
-            DialogBubbleView(
-                text: Self.monologues[currentMonologueIndex],
-                hint: "Tap to continue"
-            )
-            .opacity(isDialogVisible && !isFinalBlack ? 1 : 0)
-            .offset(
-                y: isDialogVisible || reduceMotion ? 0 : 36
-            )
+            if isDialogVisible && !isFinalBlack {
+                DialogBubbleView(
+                    text: Self.monologues[currentMonologueIndex],
+                    hint: "Tap to continue",
+                    isTextComplete: $isTextComplete,
+                    revealRequest: revealRequest
+                )
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .move(edge: .bottom).combined(with: .opacity)
+                )
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
             advance()
         }
         .onAppear {
-            scene.isPaused = true
             isRoomBreathing = true
         }
-    }
-
-    // MARK: - Advance Intro
-
-    private var roomVisibility: Double {
-        if isFinalBlack { return 0 }
-        return isDarkSequence ? 0.32 : 1
-    }
-
-    private var roomScale: CGFloat {
-        guard isRoomBreathing, !reduceMotion else { return 1 }
-
-        if isFinalBlack { return 1 }
-        return isDarkSequence ? 1.05 : 1.03
     }
 
     private func advance() {
 
         guard !hasFinished, !isTransitioning else {
+            return
+        }
+
+        guard isTextComplete else {
+            revealRequest += 1
             return
         }
 
@@ -158,35 +119,22 @@ struct IntroView: View {
             playThunder()
         }
 
-        withAnimation(.easeInOut(duration: 0.3)) {
-            isDialogVisible = false
+        isTextComplete = false
+        currentMonologueIndex = monologueIndex
+
+        withAnimation(.easeInOut(duration: 0.45)) {
             isTransitionDarkened = true
+            if entersDarkSequence {
+                isDarkSequence = true
+            }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            var textTransaction = Transaction()
-            textTransaction.disablesAnimations = true
-            withTransaction(textTransaction) {
-                currentMonologueIndex = monologueIndex
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(.easeOut(duration: 0.35)) {
+                isTransitionDarkened = false
             }
 
-            if entersDarkSequence {
-                withAnimation(.easeInOut(duration: 0.45)) {
-                    isDarkSequence = true
-                }
-            }
-
-            let revealDelay: TimeInterval = entersDarkSequence ? 0.45 : 0.05
-            DispatchQueue.main.asyncAfter(deadline: .now() + revealDelay) {
-                withAnimation(.easeOut(duration: 0.35)) {
-                    isDialogVisible = true
-                    isTransitionDarkened = false
-                }
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    isTransitioning = false
-                }
-            }
+            isTransitioning = false
         }
     }
 
@@ -209,29 +157,7 @@ struct IntroView: View {
     // MARK: - Thunder
 
     private func playThunder() {
-
-        guard let url = Bundle.main.url(
-            forResource: "IntroThunder",
-            withExtension: "wav"
-        ) else {
-            return
-        }
-
-        do {
-
-            let player = try AVAudioPlayer(
-                contentsOf: url
-            )
-
-            player.prepareToPlay()
-            player.play()
-
-            thunderPlayer = player
-
-        } catch {
-
-            thunderPlayer = nil
-        }
+        GameAudioManager.shared.playThunder()
     }
 }
 
@@ -256,22 +182,49 @@ private struct IntroVignette: View {
         GeometryReader { geometry in
             let shortestSide = min(geometry.size.width, geometry.size.height)
 
-            RadialGradient(
-                colors: [
-                    Color.clear,
-                    Color.black.opacity(0.2),
-                    Color.black.opacity(0.92)
-                ],
-                center: .center,
-                startRadius: shortestSide * (isContracted ? 0.08 : 0.16),
-                endRadius: shortestSide * (isContracted ? 0.54 : 0.68)
-            )
+            ZStack {
+                vignette(
+                    shortestSide: shortestSide,
+                    startRadiusMultiplier: 0.18,
+                    endRadiusMultiplier: 0.72,
+                    middleOpacity: 0.16,
+                    edgeOpacity: 0.86
+                )
+
+                vignette(
+                    shortestSide: shortestSide,
+                    startRadiusMultiplier: 0.07,
+                    endRadiusMultiplier: 0.50,
+                    middleOpacity: 0.30,
+                    edgeOpacity: 0.96
+                )
+                .opacity(isContracted ? 1 : 0)
+            }
             .animation(
-                .easeInOut(duration: 4.5).repeatForever(autoreverses: true),
+                .easeInOut(duration: 3.7).repeatForever(autoreverses: true),
                 value: isContracted
             )
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+    }
+
+    private func vignette(
+        shortestSide: CGFloat,
+        startRadiusMultiplier: CGFloat,
+        endRadiusMultiplier: CGFloat,
+        middleOpacity: Double,
+        edgeOpacity: Double
+    ) -> RadialGradient {
+        RadialGradient(
+            colors: [
+                Color.clear,
+                Color.black.opacity(middleOpacity),
+                Color.black.opacity(edgeOpacity)
+            ],
+            center: .center,
+            startRadius: shortestSide * startRadiusMultiplier,
+            endRadius: shortestSide * endRadiusMultiplier
+        )
     }
 }

@@ -6,16 +6,18 @@
 //
 
 
-import Foundation
 import SwiftUI
 
 struct DayTwoCutsceneView: View {
     let onContinue: () -> Void
 
-    @State private var shakeOffset: CGFloat = -5.0
+    @StateObject private var shakeDetector = SustainedShakeDetector()
     @State private var showDialog = false
-    @State private var hasContinued = false
+    @State private var showShakeInstruction = false
+    @State private var isCompleting = false
     @State private var dialogIndex = 0
+    @State private var isTextComplete = false
+    @State private var revealRequest = 0
 
     private let dialogAnimationDuration = 0.3
     private let dialogs = [
@@ -26,60 +28,102 @@ struct DayTwoCutsceneView: View {
     ]
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black
-                    .ignoresSafeArea()
+        ZStack {
+            Color.clear
+                .contentShape(Rectangle())
 
-                Image("Cocoon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: geometry.size.width)
-                    .offset(x: shakeOffset)
-                    .animation(
-                        .linear(duration: 0.05)
-                            .repeatForever(autoreverses: true),
-                        value: shakeOffset
-                    )
+            if showDialog {
+                DialogBubbleView(
+                    text: dialogs[dialogIndex],
+                    hint: "Tap to continue",
+                    isTextComplete: $isTextComplete,
+                    revealRequest: revealRequest
+                )
+                .transition(.move(edge: .bottom))
+            }
 
-                if showDialog {
-                    DialogBubbleView(
-                        text: dialogs[dialogIndex],
-                        hint: "Tap to continue"
-                    )
-                    .transition(.move(edge: .bottom))
+            if showShakeInstruction {
+                VStack {
+                    Text("Keep shaking your phone to break free")
+                        .font(.system(size: 16, weight: .semibold, design: .serif))
+                        .foregroundStyle(Color(hex: "151515"))
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 13)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: "FFFEF4"))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: "2D1B11"), lineWidth: 1.5)
+                                )
+                        )
+                        .contentShape(Capsule())
+                        .onTapGesture {
+                            completeCutscene()
+                        }
+
+                    Spacer()
+                }
+                .padding(.top, 70)
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+            }
+        }
+        .contentShape(Rectangle())
+        .animation(
+            .easeOut(duration: dialogAnimationDuration),
+            value: showDialog
+        )
+        .animation(
+            .spring(response: 0.35, dampingFraction: 0.75),
+            value: showShakeInstruction
+        )
+        .onTapGesture {
+            guard showDialog, !isCompleting else { return }
+
+            guard isTextComplete else {
+                revealRequest += 1
+                return
+            }
+
+            if dialogIndex < dialogs.count - 1 {
+                isTextComplete = false
+                dialogIndex += 1
+                return
+            }
+
+            showDialog = false
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(dialogAnimationDuration))
+                guard !isCompleting else { return }
+                showShakeInstruction = true
+                shakeDetector.start {
+                    completeCutscene()
                 }
             }
-            .contentShape(Rectangle())
-            .animation(
-                .easeOut(duration: dialogAnimationDuration),
-                value: showDialog
-            )
-            .onTapGesture {
-                guard showDialog, !hasContinued else { return }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(1.0))
+            guard !isCompleting else { return }
+            showDialog = true
+        }
+        .onDisappear {
+            shakeDetector.stop()
+        }
+    }
 
-                if dialogIndex < dialogs.count - 1 {
-                    dialogIndex += 1
-                    return
-                }
+    private func completeCutscene() {
+        guard showShakeInstruction, !isCompleting else { return }
+        isCompleting = true
+        shakeDetector.stop()
 
-                hasContinued = true
-                showDialog = false
+        withAnimation(.easeInOut(duration: dialogAnimationDuration)) {
+            showShakeInstruction = false
+        }
 
-                DispatchQueue.main.asyncAfter(
-                    deadline: .now() + dialogAnimationDuration
-                ) {
-                    onContinue()
-                }
-            }
-            .onAppear {
-                shakeOffset = 5.0
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    guard !hasContinued else { return }
-                    showDialog = true
-                }
-            }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(dialogAnimationDuration))
+            onContinue()
         }
     }
 }

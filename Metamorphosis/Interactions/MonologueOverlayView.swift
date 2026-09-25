@@ -13,6 +13,8 @@ struct MonologueOverlayView: View {
     let onDismissStarted: () -> Void
     let onDismiss: () -> Void
     @State private var isPresented = false
+    @State private var isTextComplete = false
+    @State private var revealRequest = 0
 
     private let animationDuration = 0.3
 
@@ -38,7 +40,9 @@ struct MonologueOverlayView: View {
                 DialogBubbleView(
                     heading: objectName,
                     text: monologueText,
-                    hint: "Tap to dismiss"
+                    hint: "Tap to dismiss",
+                    isTextComplete: $isTextComplete,
+                    revealRequest: revealRequest
                 )
                 .offset(y: isPresented ? 0 : geometry.size.height)
             }
@@ -50,6 +54,12 @@ struct MonologueOverlayView: View {
         }
         .onTapGesture {
             guard isPresented else { return }
+
+            guard isTextComplete else {
+                revealRequest += 1
+                return
+            }
+
             onDismissStarted()
             isPresented = false
             DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {

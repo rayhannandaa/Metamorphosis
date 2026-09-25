@@ -83,8 +83,8 @@ private struct CriticalVignette: View {
     ) -> LinearGradient {
         LinearGradient(
             colors: [
-                Color.red.opacity(isLethal ? 0.9 : 0.65),
-                Color.red.opacity(0)
+                Color(hex: "DE4B29").opacity(isLethal ? 0.9 : 0.65),
+                Color(hex: "DE4B29").opacity(0)
             ],
             startPoint: startPoint,
             endPoint: endPoint
@@ -104,27 +104,26 @@ private struct GameOverOverlay: View {
             VStack(spacing: 0) {
                 Text("GAME OVER")
                     .font(.system(size: 42, weight: .bold, design: .serif))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color(hex: "DE4B29"))
 
                 Text(cause?.message ?? "The transformation ended too soon.")
                     .font(.system(size: 18, design: .serif))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(Color(hex: "FFFEF4").opacity(0.85))
                     .padding(.horizontal, 38)
                     .padding(.top, 16)
 
                 Button(action: onPlayAgain) {
                     Text("Play Again")
                         .font(.system(size: 19, weight: .semibold, design: .serif))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(Color(hex: "151515"))
                         .padding(.horizontal, 30)
                         .padding(.vertical, 12)
-                        .background(Color.white)
+                        .background(Color(hex: "FFFEF4"))
                         .clipShape(Capsule())
                 }
                 .padding(.top, 48)
             }
-            .foregroundStyle(.white)
         }
     }
 }

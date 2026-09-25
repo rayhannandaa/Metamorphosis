@@ -19,29 +19,31 @@ final class GameClock {
     var onSunRayTick: ((Int) -> Void)?
     var onGameComplete: (() -> Void)?
 
-    private var didShowFirstSunRay = false
-    private var sunRayIndex = 0
+    private var sunRayIndex = -1
 
     var displayTime: String {
         let hour: Int
 
         if isDaytime {
-            let twoHourSlot = min(
-                6,
-                Int(elapsedInDay / ((GameConfig.dayDuration) / 6))
-            )
+            let twoHourSlot = daylightSlotIndex
             hour = min(
-                18,
+                GameConfig.dayEndHour,
                 GameConfig.dayStartHour +
                 twoHourSlot * GameConfig.dayClockStepHours
             )
         } else {
             let nightElapsed = max(0, elapsedInDay - GameConfig.dayDuration)
             let oneHourSlot = min(
-                5,
-                Int(nightElapsed / (GameConfig.nightDuration / 5))
+                GameConfig.nightClockSlotCount - 1,
+                Int(
+                    nightElapsed /
+                    (GameConfig.nightDuration / Double(GameConfig.nightClockSlotCount))
+                )
             )
-            hour = (GameConfig.nightStartHour + oneHourSlot) % 24
+            hour = (
+                GameConfig.nightStartHour +
+                oneHourSlot * GameConfig.nightClockStepHours
+            ) % 24
         }
 
         return String(format: "%02d:00", hour)
@@ -84,29 +86,31 @@ final class GameClock {
     }
 
     private func updateSunRay() {
-        if !didShowFirstSunRay {
-            guard elapsedInDay >= GameConfig.firstSunRayDelay else { return }
-            didShowFirstSunRay = true
-            sunRayIndex = 0
-            onSunRayTick?(sunRayIndex)
-            return
-        }
+        // 06:00 is a short grace period. From 08:00 onward, the ray index
+        // advances from the exact same slot used by the displayed clock.
+        let resolvedIndex = daylightSlotIndex - 1
+        guard resolvedIndex >= 0,
+              GameConfig.sunRayBottomOffsets.indices.contains(resolvedIndex),
+              resolvedIndex != sunRayIndex
+        else { return }
 
-        guard sunRayIndex < GameConfig.sunRayBottomOffsets.count - 1 else { return }
-
-        let nextThreshold =
-            GameConfig.firstSunRayDelay +
-            TimeInterval(sunRayIndex + 1) * GameConfig.sunRayInterval
-
-        if elapsedInDay >= nextThreshold {
-            sunRayIndex += 1
-            onSunRayTick?(sunRayIndex)
-        }
+        sunRayIndex = resolvedIndex
+        onSunRayTick?(resolvedIndex)
     }
 
     private func resetSunRayState() {
-        didShowFirstSunRay = false
-        sunRayIndex = 0
+        sunRayIndex = -1
+    }
+
+    private var daylightSlotIndex: Int {
+        let slotDuration =
+            GameConfig.dayDuration /
+            Double(GameConfig.dayClockSlotCount)
+
+        return min(
+            GameConfig.dayClockSlotCount - 1,
+            Int(elapsedInDay / slotDuration)
+        )
     }
 
     private func advanceDay() {

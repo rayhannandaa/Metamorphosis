@@ -5,15 +5,14 @@ struct DialogSequence {
 enum GameDialogCatalog {
     static let introduction = DialogSequence(lines: [
         "Is that… me? Why am I a larva?",
-        "I need to find out what happened.",
+        "I need to learn how to move in this body.",
         "Until then, I have to survive."
     ])
 
     static let butterflyTransformation = DialogSequence(lines: [
-        "All this time, I was afraid of what I was becoming.",
-        "But this body carried me through the light, the hunger, and the darkness.",
-        "I may not be who I was… but I can accept who I am now.",
-        "These wings are mine. It’s time to find my way out."
+        "The cocoon is gone. I have wings now.",
+        "I still don’t know why this happened, but I can finally leave this room.",
+        "The window… that’s my way out."
     ])
 
     static let windowEscape = DialogSequence(lines: [
