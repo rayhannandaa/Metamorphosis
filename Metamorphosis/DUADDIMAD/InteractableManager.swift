@@ -16,18 +16,25 @@ final class InteractableManager: ObservableObject {
     private(set) var interactableNodes: [InteractableObjectNode] = []
     private(set) var currentHighlightedNode: InteractableObjectNode?
 
-    /// Attaches the manager to a scene, adding rectangular nodes for all 9 interactable objects.
+    /// Associates each interaction type with its existing room sprite.
     func setupObjects(in scene: SKScene) {
-        // Clear any existing nodes
         for node in interactableNodes {
-            node.removeFromParent()
+            node.removeMarker()
         }
         interactableNodes.removeAll()
+        currentHighlightedNode = nil
+        nearbyObjectName = nil
 
         for type in InteractableObjectType.allCases {
-            let node = InteractableObjectNode(objectType: type)
-            scene.addChild(node)
-            interactableNodes.append(node)
+            guard let targetNode = scene.childNode(withName: "//\(type.roomNodeName)") as? SKSpriteNode else {
+                continue
+            }
+            let interactableNode = InteractableObjectNode(
+                objectType: type,
+                targetNode: targetNode,
+                interactionMargin: type.interactionMargin
+            )
+            interactableNodes.append(interactableNode)
         }
     }
 
@@ -38,16 +45,17 @@ final class InteractableManager: ObservableObject {
 
         for node in interactableNodes {
             let dist = node.distance(to: playerPosition)
-            if dist <= node.proximityRadius && dist < minDistance {
+            let isNearby = node.isInProximity(of: playerPosition)
+            node.setHighlighted(isNearby)
+
+            if isNearby && dist < minDistance {
                 minDistance = dist
                 closestNode = node
             }
         }
 
         if closestNode !== currentHighlightedNode {
-            currentHighlightedNode?.setHighlighted(false)
             currentHighlightedNode = closestNode
-            closestNode?.setHighlighted(true)
 
             let newName = closestNode?.objectType.displayName
             if nearbyObjectName != newName {
@@ -61,6 +69,42 @@ final class InteractableManager: ObservableObject {
     @discardableResult
     func triggerInteraction(phase: ASARYUNGamePhase, isDaytime: Bool) -> String? {
         guard let node = currentHighlightedNode else { return nil }
+        return triggerInteraction(with: node, phase: phase, isDaytime: isDaytime)
+    }
+
+    /// Uses the same scene-level marker hit testing as Room 0.
+    @discardableResult
+    func triggerInteraction(
+        at location: CGPoint,
+        in scene: SKScene,
+        phase: ASARYUNGamePhase,
+        isDaytime: Bool
+    ) -> String? {
+        for sceneNode in scene.nodes(at: location) {
+            guard let marker = sceneNode as? MarkerNode,
+                  marker.isRevealed,
+                  let interactableNode = interactableNodes.first(where: {
+                      $0.objectType == marker.objectType
+                  })
+            else {
+                continue
+            }
+
+            return triggerInteraction(
+                with: interactableNode,
+                phase: phase,
+                isDaytime: isDaytime
+            )
+        }
+
+        return nil
+    }
+
+    private func triggerInteraction(
+        with node: InteractableObjectNode,
+        phase: ASARYUNGamePhase,
+        isDaytime: Bool
+    ) -> String? {
         guard let monologue = node.triggerMonologue(for: phase, isDaytime: isDaytime) else {
             return nil
         }
@@ -72,5 +116,10 @@ final class InteractableManager: ObservableObject {
     /// Dismisses the currently displayed monologue.
     func dismissMonologue() {
         activeMonologue = nil
+    }
+
+    /// Returns the real room sprite's center for the development test harness.
+    func position(for type: InteractableObjectType) -> CGPoint? {
+        interactableNodes.first { $0.objectType == type }?.targetNode.position
     }
 }

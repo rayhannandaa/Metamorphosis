@@ -1,8 +1,6 @@
 import SpriteKit
 import SwiftUI
 
-
-
 final class RoomScene: SKScene {
     let interactableManager = InteractableManager()
 
@@ -22,17 +20,24 @@ final class RoomScene: SKScene {
     private lazy var playerNode = PlayerNode(
         config: playerConfig
     )
+
+    private lazy var collisionController = RoomCollisionController(
+        obstacles: config.collisionObjects,
+        boundary: config.roomBoundary,
+        playerSpriteSize: playerConfig.size
+    )
     
     private lazy var movementController = PlayerMovementController(
         player: playerNode,
         config: playerConfig,
-        bounds: CGRect(origin: .zero, size: config.sceneSize)
+        bounds: CGRect(origin: .zero, size: config.sceneSize),
+        collisionController: collisionController
     )
     let asaryunSession = ASARYUNGameSessionController()
 
     init(
         config: RoomConfig,
-        playerConfig: PlayerConfig = .centaur,
+        playerConfig: PlayerConfig = .player, // <--- CHANGED FROM .centaur
         zoomScale: CGFloat = 1,
         initialCameraPosition: CGPoint? = nil
     ) {
@@ -63,19 +68,31 @@ final class RoomScene: SKScene {
         interactableManager.setupObjects(in: self)
         
         if let window = config.objects.first(where: { $0.name == "Window" }) {
+                let collisionController = self.collisionController
                 asaryunSession.attach(
                     scene: self,
                     playerNode: playerNode,
                     windowPosition: window.position,
                     windowSize: window.size,
-                    sceneSize: config.sceneSize
+                    sceneSize: config.sceneSize,
+                    isFoodPlacementValid: { position, size in
+                        collisionController.isAreaClear(
+                            center: position,
+                            size: size,
+                            clearance: ASARYUNGameConfig.foodSpawnClearance
+                        )
+                    }
                 )
             }
     }
     
     override func update(_ currentTime: TimeInterval) {
         
-        interactableManager.update(playerPosition: playerNode.position)
+        interactableManager.update(
+            playerPosition: collisionController.interactionPosition(
+                for: playerNode.position
+            )
+        )
         
         defer { lastUpdateTime = currentTime }
         guard let lastUpdateTime else { return }
@@ -94,6 +111,17 @@ final class RoomScene: SKScene {
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
         guard asaryunSession.phase == .worm || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: self)
+        interactableManager.triggerInteraction(
+            at: location,
+            in: self,
+            phase: asaryunSession.phase,
+            isDaytime: asaryunSession.isDaytime
+        )
     }
 
     private func setupCameraIfNeeded(in view: SKView) {
@@ -170,12 +198,6 @@ private struct RoomScenePreview: View {
             .background(Color.black)
     }
 }
-
-
-
-
-
-
 
 #Preview(
     traits: .fixedLayout(width: 500, height: 800)

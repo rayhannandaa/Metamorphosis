@@ -4,7 +4,6 @@
 //
 
 import CoreGraphics
-import SpriteKit
 
 /// Identifies each interactable object in the game and defines its
 /// dialogue depending on the character state (ASARYUNGamePhase) and time of day.
@@ -21,6 +20,33 @@ enum InteractableObjectType: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The name assigned to the real room sprite by RoomWorldController.
+    var roomNodeName: String {
+        switch self {
+        case .bed: return "Bed"
+        case .window: return "Window"
+        case .smartphone: return "Phone"
+        case .photoAlbum: return "Photo"
+        case .laptop: return "Laptop"
+        case .crochetBeanie: return "Beanie"
+        case .wardrobe: return "Wardrobe"
+        case .door: return "Door"
+        case .sofa: return "Sofa"
+        }
+    }
+
+    /// Distance outside the sprite's edge where interaction becomes available.
+    var interactionMargin: CGFloat {
+        switch self {
+        case .window:
+            return 35
+        case .photoAlbum:
+            return 60
+        default:
+            return 25
+        }
+    }
+
     var displayName: String {
         switch self {
         case .bed: return "Bed"
@@ -32,48 +58,6 @@ enum InteractableObjectType: String, CaseIterable, Identifiable {
         case .wardrobe: return "Wardrobe"
         case .door: return "Door"
         case .sofa: return "Sofa"
-        }
-    }
-
-    var defaultSize: CGSize {
-        switch self {
-        case .bed: return CGSize(width: 90, height: 140)
-        case .window: return CGSize(width: 95, height: 75)
-        case .smartphone: return CGSize(width: 28, height: 42)
-        case .photoAlbum: return CGSize(width: 36, height: 42)
-        case .laptop: return CGSize(width: 46, height: 36)
-        case .crochetBeanie: return CGSize(width: 32, height: 30)
-        case .wardrobe: return CGSize(width: 85, height: 125)
-        case .door: return CGSize(width: 55, height: 110)
-        case .sofa: return CGSize(width: 120, height: 75)
-        }
-    }
-
-    var defaultColor: SKColor {
-        switch self {
-        case .bed: return SKColor(red: 0.28, green: 0.38, blue: 0.65, alpha: 1.0)
-        case .window: return SKColor(red: 0.35, green: 0.70, blue: 0.90, alpha: 1.0)
-        case .smartphone: return SKColor(red: 0.25, green: 0.25, blue: 0.30, alpha: 1.0)
-        case .photoAlbum: return SKColor(red: 0.76, green: 0.58, blue: 0.40, alpha: 1.0)
-        case .laptop: return SKColor(red: 0.45, green: 0.48, blue: 0.55, alpha: 1.0)
-        case .crochetBeanie: return SKColor(red: 0.85, green: 0.45, blue: 0.45, alpha: 1.0)
-        case .wardrobe: return SKColor(red: 0.50, green: 0.34, blue: 0.24, alpha: 1.0)
-        case .door: return SKColor(red: 0.38, green: 0.26, blue: 0.18, alpha: 1.0)
-        case .sofa: return SKColor(red: 0.25, green: 0.50, blue: 0.45, alpha: 1.0)
-        }
-    }
-
-    var defaultPosition: CGPoint {
-        switch self {
-        case .bed: return CGPoint(x: 95, y: 580)
-        case .window: return CGPoint(x: 250, y: 720)
-        case .smartphone: return CGPoint(x: 420, y: 80)
-        case .photoAlbum: return CGPoint(x: 430, y: 310)
-        case .laptop: return CGPoint(x: 385, y: 415)
-        case .crochetBeanie: return CGPoint(x: 100, y: 75)
-        case .wardrobe: return CGPoint(x: 415, y: 675)
-        case .door: return CGPoint(x: 50, y: 360)
-        case .sofa: return CGPoint(x: 110, y: 175)
         }
     }
 

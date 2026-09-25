@@ -14,21 +14,24 @@
 //  Published properties drive the SwiftUI HUD (ASARYUNHUDOverlay).
 //
 
+//
+//  ASARYUNGameSessionController.swift
+//  ASARYUN
+//
+
 import SpriteKit
 import Combine
 
 final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsContactDelegate {
-    // MARK: HUD-facing state
     @Published private(set) var day: Int = 1
     @Published private(set) var totalDays: Int = ASARYUNGameConfig.totalDemoDays
     @Published private(set) var phase: ASARYUNGamePhase = .worm
     @Published private(set) var isDaytime: Bool = true
     @Published private(set) var displayTime: String = "06:00"
     @Published private(set) var stressValue: CGFloat = 0
-    @Published private(set) var hungerValue: CGFloat = ASARYUNGameConfig.maxBarValue
+    @Published private(set) var hungerValue: CGFloat = ASARYUNGameConfig.initialHungerValue
     @Published private(set) var isGameComplete: Bool = false
 
-    // MARK: Internals
     private let clock = ASARYUNGameClock()
     private let stress = ASARYUNStressManager()
     private let hunger = ASARYUNHungerManager()
@@ -40,34 +43,30 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     private var hasAttached = false
     private var hudRefreshAccumulator: TimeInterval = 0
     private var pendingStressValue: CGFloat = 0
-    private var pendingHungerValue: CGFloat = ASARYUNGameConfig.maxBarValue
+    private var pendingHungerValue: CGFloat = ASARYUNGameConfig.initialHungerValue
+    private var isFoodPlacementValid: ((CGPoint, CGSize) -> Bool)?
 
-    // How many sun rays the worm is currently overlapping, and how long
-    // it's been continuously standing in at least one of them.
     private var sunContactCount = 0
     private var sunExposureTimer: TimeInterval = 0
 
-    /// Wires everything up. Call once, after the room has been built and
-    /// the player node added to the scene.
     func attach(
         scene: SKScene,
         playerNode: SKNode,
         windowPosition: CGPoint,
         windowSize: CGSize,
-        sceneSize: CGSize
+        sceneSize: CGSize,
+        isFoodPlacementValid: @escaping (CGPoint, CGSize) -> Bool
     ) {
         guard !hasAttached else { return }
         hasAttached = true
 
         self.scene = scene
         self.playerNode = playerNode
+        self.isFoodPlacementValid = isFoodPlacementValid
 
         scene.physicsWorld.contactDelegate = self
         scene.physicsWorld.gravity = .zero
 
-        // The worm only needs a physics body to detect overlap with sun
-        // rays / food; it stays kinematic (isDynamic) but is never moved
-        // by the physics engine itself since nothing applies forces to it.
         let body = SKPhysicsBody(rectangleOf: CGSize(width: 36, height: 46))
         body.isDynamic = true
         body.affectedByGravity = false
@@ -100,7 +99,6 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         spawnFood(count: ASARYUNGameConfig.foodPerDay)
     }
 
-    /// Drive every ASARYUN system forward. Call from RoomScene.update(_:).
     func update(deltaTime: TimeInterval) {
         guard hasAttached, deltaTime.isFinite, deltaTime > 0 else { return }
 
@@ -113,9 +111,6 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
             sunExposureTimer = 0
         }
 
-        // SpriteKit still runs normally, but SwiftUI is not invalidated on
-        // every game frame. This prevents the HUD from causing visible
-        // refresh/jitter while the simulation continues smoothly.
         hudRefreshAccumulator += deltaTime
         if hudRefreshAccumulator >= ASARYUNGameConfig.hudUpdateInterval {
             hudRefreshAccumulator = 0
@@ -124,9 +119,17 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
             displayTime = clock.displayTime
         }
     }
+    
+    // NEW MECHANIC: Allows the cutscene overlay to instantly fast-forward to Day 3
+    func skipToDay(_ targetDay: Int) {
+        clock.skipToDay(targetDay)
+        day = clock.currentDay
+        displayTime = clock.displayTime
+        isDaytime = clock.isDaytime
+        phase = clock.currentPhase
+        dayNight?.setDaytime(isDaytime)
+    }
 
-    /// While the worm keeps standing in a sun ray, stress ticks up again
-    /// every `stressSunIntervalSeconds` instead of only once on contact.
     private func updateSunExposure(deltaTime: TimeInterval) {
         guard sunContactCount > 0 else {
             sunExposureTimer = 0
@@ -139,14 +142,11 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         }
     }
 
-    // MARK: Clock callbacks
     private func handleDayNightChange(_ isDay: Bool) {
         isDaytime = isDay
         displayTime = clock.displayTime
         dayNight?.setDaytime(isDay)
         if !isDay {
-            // Safety net: no sun rays exist at night, so exposure can't
-            // still be active even if a contact's didEnd was ever missed.
             sunContactCount = 0
             sunExposureTimer = 0
         }
@@ -158,50 +158,75 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
 
     private func handlePhaseChange(_ newPhase: ASARYUNGamePhase) {
         phase = newPhase
-
-        // Swap the visible sprite for pupa / butterfly without touching
-        // PlayerNode's own animation system. The worm phase is left
-        // completely alone so its walk-cycle keeps working as before.
-        guard let spriteNode = playerNode as? SKSpriteNode else { return }
-        switch newPhase {
-        case .worm:
-            break
-        case .pupa:
-            spriteNode.removeAllActions()
-            spriteNode.texture = SKTexture(imageNamed: "ASARYUN_Pupa")
-        case .butterfly:
-            spriteNode.removeAllActions()
-            spriteNode.texture = SKTexture(imageNamed: "ASARYUN_Butterfly")
+        
+        // Fix: Pass the phase directly to the PlayerNode so it handles its own resolution/animations
+        if let player = playerNode as? PlayerNode {
+            player.currentPhase = newPhase
         }
     }
 
     private func handleNewDay(_ newDay: Int) {
         day = newDay
         stress.reset()
-        // Hunger and food both persist across the day/night boundary now —
-        // hunger only resets when eaten, food only respawns when it runs out.
     }
 
-    // MARK: Food
     private func spawnFood(count: Int) {
         guard let scene else { return }
         let size = scene.size
+
         for _ in 0..<count {
-            let x = CGFloat.random(in: 60...(size.width - 60))
-            let y = CGFloat.random(in: 120...(size.height - 160))
-            let food = ASARYUNFoodNode(position: CGPoint(x: x, y: y))
+            guard let kind = ASARYUNFoodKind.allCases.randomElement() else { continue }
+            var spawnPosition: CGPoint?
+
+            for _ in 0..<ASARYUNGameConfig.foodSpawnMaxAttempts {
+                let candidate = CGPoint(
+                    x: CGFloat.random(in: 60...(size.width - 60)),
+                    y: CGFloat.random(in: 120...(size.height - 160))
+                )
+
+                let clearsRoomObjects = isFoodPlacementValid?(candidate, kind.size) ?? false
+                let candidateFrame = CGRect(
+                    x: candidate.x - kind.size.width / 2,
+                    y: candidate.y - kind.size.height / 2,
+                    width: kind.size.width,
+                    height: kind.size.height
+                ).insetBy(
+                    dx: -ASARYUNGameConfig.foodSpawnClearance,
+                    dy: -ASARYUNGameConfig.foodSpawnClearance
+                )
+                let clearsOtherFood = foodNodes.allSatisfy { food in
+                    !candidateFrame.intersects(
+                        food.frame.insetBy(
+                            dx: -ASARYUNGameConfig.foodSpawnClearance,
+                            dy: -ASARYUNGameConfig.foodSpawnClearance
+                        )
+                    )
+                }
+
+                if clearsRoomObjects && clearsOtherFood {
+                    spawnPosition = candidate
+                    break
+                }
+            }
+
+            guard let spawnPosition else { continue }
+            let food = ASARYUNFoodNode(position: spawnPosition, kind: kind)
             scene.addChild(food)
             foodNodes.append(food)
         }
     }
 
-    // MARK: SKPhysicsContactDelegate
     func didBegin(_ contact: SKPhysicsContact) {
         let categories = contact.bodyA.categoryBitMask | contact.bodyB.categoryBitMask
 
         if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.sunRay) {
             guard phase == .worm else { return }
+            let isBeginningExposure = sunContactCount == 0
             sunContactCount += 1
+            if isBeginningExposure {
+                sunExposureTimer = 0
+                stress.registerSunHit()
+            }
         } else if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.food) {
             let foodBody = contact.bodyA.categoryBitMask == ASARYUNPhysicsCategory.food ? contact.bodyA : contact.bodyB
             guard let foodNode = foodBody.node as? ASARYUNFoodNode else { return }
@@ -209,7 +234,6 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
             foodNode.removeFromParent()
             foodNodes.removeAll { $0 === foodNode }
 
-            // Only top the food back up once every piece has been eaten.
             if foodNodes.isEmpty {
                 spawnFood(count: ASARYUNGameConfig.foodPerDay)
             }

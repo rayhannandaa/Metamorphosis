@@ -5,45 +5,78 @@ import Foundation
 struct GameView: View {
     private static let roomConfig = RoomConfig.room
     private let scene = RoomScene(config: roomConfig, zoomScale: 600 / 437)
+    
     @State private var showIntroMonologue = true
-
+    
+    // Smooth Cutscene states
+    @State private var isShowingCutscene: Bool = false
+    @State private var cutsceneOpacity: Double = 0.0
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color(hex: "131313")
 
+                // ALWAYS render the game in the background so it can fade in/out
                 SpriteView(scene: scene, options: [.allowsTransparency])
-                    .frame(
-                        width: geometry.size.width,
-                        height: geometry.size.height
-                    )
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipped()
 
-                HUDView(scene: scene)
-                ASARYUNHUDOverlay(session: scene.asaryunSession)
+                if !isShowingCutscene {
+                    HUDView(scene: scene)
+                    ASARYUNHUDOverlay(session: scene.asaryunSession)
+                    MonologueObserver(manager: scene.interactableManager)
+                }
                 
-                
-                MonologueObserver(manager: scene.interactableManager)
                 if showIntroMonologue {
-                        GameIntroMonologueOverlay(
-                            text: "What happened, why did I suddenly shrink",
-                            onDismiss: {
-                                showIntroMonologue = false
-                            }
-                        )
-                    }
+                    GameIntroMonologueOverlay(
+                        text: "What happened, why did I suddenly shrink",
+                        onDismiss: { showIntroMonologue = false }
+                    )
+                }
                 
-//                if let monologue = scene.interactableManager.activeMonologue {
-//                    MonologueOverlayView(
-//                    objectName: monologue.objectName,
-//                    monologueText: monologue.text,
-//                    onDismiss: { scene.interactableManager.dismissMonologue() }
-//                    )
-//                }
+                // THE CINEMATIC FADE OVERLAY
+                if isShowingCutscene {
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        Image("Cocoon") // Uses your asset natively
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 150, height: 150)
+                            .offset(y: -20)
+                    }
+                    .opacity(cutsceneOpacity)
+                    .allowsHitTesting(true)
+                }
             }
         }
         .ignoresSafeArea()
+        // Listen to the ACTUAL game session day to trigger the event
+        .onChange(of: scene.asaryunSession.day) { newDay in
+            if newDay == 2 {
+                isShowingCutscene = true
+                
+                // 1. Fade Out into Black
+                withAnimation(.easeInOut(duration: 2.0)) {
+                    cutsceneOpacity = 1.0
+                }
+                
+                // 2. Wait 4 seconds, skip the background game session directly to Day 3
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                    scene.asaryunSession.skipToDay(3)
+                    
+                    // 3. Fade In back to the gameplay
+                    withAnimation(.easeInOut(duration: 2.5)) {
+                        cutsceneOpacity = 0.0
+                    }
+                    
+                    // 4. Clean up the overlay view
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        isShowingCutscene = false
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -57,66 +90,10 @@ private struct GameIntroMonologueOverlay: View {
                 .opacity(0.45)
                 .ignoresSafeArea()
 
-            VStack {
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("ASARYUN")
-                        .font(
-                            .system(
-                                size: 12,
-                                weight: .bold,
-                                design: .monospaced
-                            )
-                        )
-                        .foregroundStyle(.white.opacity(0.55))
-                        .tracking(2)
-
-                    Text(text)
-                        .font(
-                            .system(
-                                size: 18,
-                                weight: .medium,
-                                design: .serif
-                            )
-                        )
-                        .foregroundStyle(.white)
-                        .lineSpacing(5)
-                        .fixedSize(
-                            horizontal: false,
-                            vertical: true
-                        )
-
-                    Text("Tap to continue")
-                        .font(
-                            .system(
-                                size: 11,
-                                weight: .regular,
-                                design: .monospaced
-                            )
-                        )
-                        .foregroundStyle(.white.opacity(0.45))
-                        .frame(
-                            maxWidth: .infinity,
-                            alignment: .trailing
-                        )
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.black.opacity(0.82))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(
-                                    Color.white.opacity(0.18),
-                                    lineWidth: 1
-                                )
-                        )
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 44)
-            }
+            ASARYUNDialogBubble(
+                text: text,
+                hint: "Tap to continue"
+            )
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -144,14 +121,12 @@ private struct HUDView: View {
                             height: button.size.height * scaleY
                         ),
                         onPress: {
-                            // Jika tombol Action yang ditekan, panggil interaksi
                             if button.name == "ActionButton" {
                                 scene.interactableManager.triggerInteraction(
                                     phase: scene.asaryunSession.phase,
                                     isDaytime: scene.asaryunSession.isDaytime
                                 )
                             } else {
-                                // Jika tombol arah yang ditekan, karakter berjalan
                                 setDirection(button.direction, isActive: true)
                             }
                         },
@@ -184,8 +159,6 @@ private struct HUDButtonConfig {
     let position: CGPoint
     let direction: MovementDirection?
 }
-
-
 
 private extension Array where Element == HUDButtonConfig {
     static let roomHUD: [HUDButtonConfig] = [
@@ -288,7 +261,6 @@ private struct PressableButton: View {
 ) {
     GameView()
 }
-
 
 struct MonologueObserver: View {
     @ObservedObject var manager: InteractableManager

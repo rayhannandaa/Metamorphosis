@@ -15,12 +15,19 @@ final class PlayerMovementController {
     private let player: PlayerNode
     private let config: PlayerConfig
     private let bounds: CGRect
+    private let collisionController: RoomCollisionController
     private var activeDirections: Set<MovementDirection> = []
 
-    init(player: PlayerNode, config: PlayerConfig, bounds: CGRect) {
+    init(
+        player: PlayerNode,
+        config: PlayerConfig,
+        bounds: CGRect,
+        collisionController: RoomCollisionController
+    ) {
         self.player = player
         self.config = config
         self.bounds = bounds
+        self.collisionController = collisionController
     }
 
     func setDirection(_ direction: MovementDirection, isActive: Bool) {
@@ -43,7 +50,16 @@ final class PlayerMovementController {
             return
         }
 
-        player.move(by: translation, facing: facing)
+        let resolvedTranslation = collisionController.resolvedTranslation(
+            translation,
+            from: player.position
+        )
+        guard resolvedTranslation.dx != 0 || resolvedTranslation.dy != 0 else {
+            player.stopWalking()
+            return
+        }
+
+        player.move(by: resolvedTranslation, facing: facing)
         clampPlayerToBounds()
     }
 

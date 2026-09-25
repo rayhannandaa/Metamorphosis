@@ -71,7 +71,7 @@ struct ASARYUNIntroView: View {
                     .opacity(0.62)
                     .ignoresSafeArea()
 
-                ASARYUNIntroMonologueBox(
+                ASARYUNDialogBubble(
                     text: Self.monologues[0],
                     hint: "Tap to continue"
                 )
@@ -83,7 +83,7 @@ struct ASARYUNIntroView: View {
                 Color.black
                     .ignoresSafeArea()
 
-                ASARYUNIntroMonologueBox(
+                ASARYUNDialogBubble(
                     text: Self.monologues[index],
                     hint: "Tap to continue"
                 )
@@ -211,99 +211,6 @@ struct ASARYUNIntroView: View {
         } catch {
 
             thunderPlayer = nil
-        }
-    }
-}
-
-// MARK: - Monologue Box
-
-private struct ASARYUNIntroMonologueBox: View {
-
-    let text: String
-    let hint: String
-
-    var body: some View {
-
-        VStack {
-
-            Spacer()
-
-            VStack(
-                alignment: .leading,
-                spacing: 12
-            ) {
-
-                // Character / narrator name
-
-                Text("ASARYUN")
-                    .font(
-                        .system(
-                            size: 12,
-                            weight: .bold,
-                            design: .monospaced
-                        )
-                    )
-                    .foregroundStyle(
-                        .white.opacity(0.55)
-                    )
-                    .tracking(2)
-
-                // Monologue
-
-                Text(text)
-                    .font(
-                        .system(
-                            size: 18,
-                            weight: .medium,
-                            design: .serif
-                        )
-                    )
-                    .foregroundStyle(.white)
-                    .lineSpacing(5)
-                    .fixedSize(
-                        horizontal: false,
-                        vertical: true
-                    )
-
-                // Continue hint
-
-                Text(hint)
-                    .font(
-                        .system(
-                            size: 11,
-                            weight: .regular,
-                            design: .monospaced
-                        )
-                    )
-                    .foregroundStyle(
-                        .white.opacity(0.45)
-                    )
-                    .frame(
-                        maxWidth: .infinity,
-                        alignment: .trailing
-                    )
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(
-                    cornerRadius: 12
-                )
-                .fill(
-                    Color.black.opacity(0.82)
-                )
-                .overlay(
-                    RoundedRectangle(
-                        cornerRadius: 12
-                    )
-                    .stroke(
-                        Color.white.opacity(0.18),
-                        lineWidth: 1
-                    )
-                )
-            )
-            .padding(.horizontal, 20)
-            .padding(.bottom, 44)
         }
     }
 }
