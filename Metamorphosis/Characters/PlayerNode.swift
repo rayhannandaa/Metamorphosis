@@ -13,7 +13,7 @@ final class PlayerNode: SKSpriteNode {
     private let minimumWalkAnimationDuration: TimeInterval = 0.25
     
     // Now listens to the game's actual phase instead of a detached integer
-    var currentPhase: ASARYUNGamePhase = .worm {
+    var currentPhase: GamePhase = .worm {
         didSet {
             updateAnimation(facing: currentFacing, isWalking: isWalking, forceUpdate: true)
         }

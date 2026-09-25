@@ -1,20 +1,13 @@
 import SpriteKit
 import SwiftUI
-import Foundation
 
 struct GameView: View {
     private static let roomConfig = RoomConfig.room
+
     @State private var scene: RoomScene
-    
-    @State private var showIntroMonologue = true
+    @State private var sequenceState: GameSequenceState = .introduction
     @State private var isIntroDismissing = false
-    @State private var showButterflyMonologue = false
-    @State private var showEscapeMonologue = false
-    @State private var isEscapeAnimationPlaying = false
-    
-    // Smooth Cutscene states
-    @State private var isShowingCutscene: Bool = false
-    @State private var cutsceneOpacity: Double = 0.0
+    @State private var cutsceneOpacity = 0.0
 
     init() {
         _scene = State(initialValue: Self.makeScene())
@@ -25,120 +18,105 @@ struct GameView: View {
             ZStack {
                 Color(hex: "131313")
 
-                // ALWAYS render the game in the background so it can fade in/out
                 SpriteView(scene: scene, options: [.allowsTransparency])
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipped()
                     .id(ObjectIdentifier(scene))
 
-                DayTwoCutsceneTrigger(session: scene.asaryunSession) {
-                    beginDayTwoCutscene()
-                }
-                .id(ObjectIdentifier(scene.asaryunSession))
+                gameFlowTriggers
 
-                EscapeRequestTrigger(session: scene.asaryunSession) {
-                    showEscapeMonologue = true
-                }
-                .id(ObjectIdentifier(scene.asaryunSession))
-
-                if !isShowingCutscene {
+                if sequenceState != .cocoonCutscene {
                     GameplayOverlay(
                         scene: scene,
-                        isIntroBlockingHUD: showIntroMonologue && !isIntroDismissing,
-                        isStoryDialogBlockingControls: showButterflyMonologue
-                            || showEscapeMonologue
-                            || isEscapeAnimationPlaying
+                        isIntroBlockingHUD: sequenceState == .introduction
+                            && !isIntroDismissing,
+                        isStoryDialogBlockingControls: sequenceState.blocksGameplayControls
                     )
                     .id(ObjectIdentifier(scene))
                 }
-                
-                if showIntroMonologue {
-                    GameIntroMonologueOverlay(
-                        lines: [
-                            "Is that… me? Why am I a larva?",
-                            "I need to find out what happened.",
-                            "Until then, I have to survive."
-                        ],
-                        onDismissStarted: {
-                            isIntroDismissing = true
-                        },
-                        onDismiss: {
-                            showIntroMonologue = false
-                            isIntroDismissing = false
-                            scene.asaryunSession.start()
-                        }
-                    )
-                }
-                
-                // THE CINEMATIC FADE OVERLAY
-                if isShowingCutscene {
-                    DayTwoCutsceneView {
-                        finishDayTwoCutscene()
-                    }
-                    .opacity(cutsceneOpacity)
-                    .allowsHitTesting(true)
-                }
 
-                if showButterflyMonologue {
-                    StoryMonologueSequenceOverlay(lines: [
-                        "All this time, I was afraid of what I was becoming.",
-                        "But this body carried me through the light, the hunger, and the darkness.",
-                        "I may not be who I was… but I can accept who I am now.",
-                        "These wings are mine. It’s time to find my way out."
-                    ]) {
-                        showButterflyMonologue = false
-                        scene.asaryunSession.start()
-                    }
-                }
-
-                if showEscapeMonologue {
-                    StoryMonologueSequenceOverlay(lines: [
-                        "The air is coming through the window.",
-                        "There’s nothing left for me in this room.",
-                        "It’s time to fly."
-                    ]) {
-                        showEscapeMonologue = false
-                        scene.asaryunSession.beginWindowEscape()
-
-                        withAnimation(.easeIn(duration: 1.6)) {
-                            isEscapeAnimationPlaying = true
-                        }
-
-                        scene.performWindowEscape {
-                            scene.asaryunSession.completeWindowEscape()
-                            withAnimation(.easeOut(duration: 0.8)) {
-                                isEscapeAnimationPlaying = false
-                            }
-                        }
-                    }
-                }
+                sequenceOverlay
 
                 Color(red: 1.0, green: 0.91, blue: 0.65)
-                    .opacity(isEscapeAnimationPlaying ? 0.72 : 0)
+                    .opacity(sequenceState == .escaping ? 0.72 : 0)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 
-                ASARYUNSurvivalOverlay(
-                    session: scene.asaryunSession,
+                SurvivalOverlay(
+                    session: scene.session,
                     onPlayAgain: playAgain
                 )
-                .id(ObjectIdentifier(scene.asaryunSession))
+                .id(ObjectIdentifier(scene.session))
 
-                ASARYUNVictoryOverlay(
-                    session: scene.asaryunSession,
+                VictoryOverlay(
+                    session: scene.session,
                     onPlayAgain: playAgain
                 )
-                .id(ObjectIdentifier(scene.asaryunSession))
+                .id(ObjectIdentifier(scene.session))
             }
         }
         .ignoresSafeArea()
     }
 
+    private var gameFlowTriggers: some View {
+        ZStack {
+            DayTwoCutsceneTrigger(session: scene.session) {
+                beginDayTwoCutscene()
+            }
+
+            EscapeRequestTrigger(session: scene.session) {
+                sequenceState = .escapeDialogue
+            }
+        }
+        .id(ObjectIdentifier(scene.session))
+    }
+
+    @ViewBuilder
+    private var sequenceOverlay: some View {
+        switch sequenceState {
+        case .introduction:
+            DialogSequenceOverlay(
+                sequence: GameDialogCatalog.introduction,
+                onDismissStarted: {
+                    isIntroDismissing = true
+                },
+                onDismiss: {
+                    isIntroDismissing = false
+                    sequenceState = .playing
+                    scene.session.start()
+                }
+            )
+
+        case .cocoonCutscene:
+            DayTwoCutsceneView {
+                finishDayTwoCutscene()
+            }
+            .opacity(cutsceneOpacity)
+            .allowsHitTesting(true)
+
+        case .butterflyDialogue:
+            DialogSequenceOverlay(
+                sequence: GameDialogCatalog.butterflyTransformation
+            ) {
+                sequenceState = .playing
+                scene.session.start()
+            }
+
+        case .escapeDialogue:
+            DialogSequenceOverlay(sequence: GameDialogCatalog.windowEscape) {
+                beginWindowEscape()
+            }
+
+        case .playing, .escaping:
+            EmptyView()
+        }
+    }
+
     private func beginDayTwoCutscene() {
         scene.stopAllMovement()
-        scene.asaryunSession.pause()
+        scene.session.pause()
         scene.setPlayerVisible(false)
-        isShowingCutscene = true
+        sequenceState = .cocoonCutscene
 
         withAnimation(.easeInOut(duration: 2.0)) {
             cutsceneOpacity = 1.0
@@ -146,7 +124,7 @@ struct GameView: View {
     }
 
     private func finishDayTwoCutscene() {
-        scene.asaryunSession.skipToDay(3)
+        scene.session.skipToDay(3)
         scene.setPlayerVisible(true)
 
         withAnimation(.easeInOut(duration: 2.5)) {
@@ -154,386 +132,37 @@ struct GameView: View {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            isShowingCutscene = false
-            showButterflyMonologue = true
+            sequenceState = .butterflyDialogue
+        }
+    }
+
+    private func beginWindowEscape() {
+        scene.session.beginWindowEscape()
+
+        withAnimation(.easeIn(duration: 1.6)) {
+            sequenceState = .escaping
+        }
+
+        scene.performWindowEscape {
+            scene.session.completeWindowEscape()
+            withAnimation(.easeOut(duration: 0.8)) {
+                sequenceState = .playing
+            }
         }
     }
 
     private func playAgain() {
         let newScene = Self.makeScene()
 
-        showIntroMonologue = false
         isIntroDismissing = false
-        showButterflyMonologue = false
-        showEscapeMonologue = false
-        isEscapeAnimationPlaying = false
-        isShowingCutscene = false
         cutsceneOpacity = 0
+        sequenceState = .playing
         scene = newScene
-        newScene.asaryunSession.start()
+        newScene.session.start()
     }
 
     private static func makeScene() -> RoomScene {
         RoomScene(config: roomConfig, zoomScale: 600 / 437)
-    }
-}
-
-private struct StoryMonologueSequenceOverlay: View {
-    let lines: [String]
-    let onDismiss: () -> Void
-
-    @State private var lineIndex = 0
-    @State private var isPresented = false
-
-    private let animationDuration = 0.3
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black
-                    .opacity(isPresented ? 0.4 : 0)
-                    .ignoresSafeArea()
-
-                ASARYUNDialogBubble(
-                    text: lines[lineIndex],
-                    hint: "Tap to continue"
-                )
-                .offset(y: isPresented ? 0 : geometry.size.height)
-            }
-        }
-        .contentShape(Rectangle())
-        .animation(.easeOut(duration: animationDuration), value: isPresented)
-        .onAppear {
-            isPresented = true
-        }
-        .onTapGesture {
-            guard isPresented else { return }
-
-            if lineIndex < lines.count - 1 {
-                lineIndex += 1
-                return
-            }
-
-            isPresented = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
-                onDismiss()
-            }
-        }
-    }
-}
-
-private struct EscapeRequestTrigger: View {
-    @ObservedObject var session: ASARYUNGameSessionController
-    let onEscapeRequested: () -> Void
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .allowsHitTesting(false)
-            .onChange(of: session.isEscapeRequested, initial: true) { _, isRequested in
-                guard isRequested else { return }
-                onEscapeRequested()
-            }
-    }
-}
-
-private struct DayTwoCutsceneTrigger: View {
-    @ObservedObject var session: ASARYUNGameSessionController
-    let onDayTwo: () -> Void
-
-    @State private var hasTriggered = false
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .allowsHitTesting(false)
-            .onChange(of: session.day, initial: true) { _, newDay in
-                guard newDay == 2, !hasTriggered else { return }
-                hasTriggered = true
-                onDayTwo()
-            }
-    }
-}
-
-private struct GameIntroMonologueOverlay: View {
-    let lines: [String]
-    let onDismissStarted: () -> Void
-    let onDismiss: () -> Void
-    @State private var isPresented = false
-    @State private var lineIndex = 0
-
-    private let animationDuration = 0.3
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black
-                    .opacity(isPresented ? 0.45 : 0)
-                    .ignoresSafeArea()
-
-                ASARYUNDialogBubble(
-                    text: lines[lineIndex],
-                    hint: "Tap to continue"
-                )
-                .offset(y: isPresented ? 0 : geometry.size.height)
-            }
-        }
-        .contentShape(Rectangle())
-        .animation(.easeOut(duration: animationDuration), value: isPresented)
-        .onAppear {
-            isPresented = true
-        }
-        .onTapGesture {
-            guard isPresented else { return }
-
-            if lineIndex < lines.count - 1 {
-                lineIndex += 1
-                return
-            }
-
-            onDismissStarted()
-            isPresented = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
-                onDismiss()
-            }
-        }
-    }
-}
-
-private struct GameplayOverlay: View {
-    let scene: RoomScene
-    let isIntroBlockingHUD: Bool
-    let isStoryDialogBlockingControls: Bool
-    @ObservedObject private var interactableManager: InteractableManager
-    @State private var isMonologueDismissing = false
-
-    init(
-        scene: RoomScene,
-        isIntroBlockingHUD: Bool,
-        isStoryDialogBlockingControls: Bool
-    ) {
-        self.scene = scene
-        self.isIntroBlockingHUD = isIntroBlockingHUD
-        self.isStoryDialogBlockingControls = isStoryDialogBlockingControls
-        _interactableManager = ObservedObject(
-            wrappedValue: scene.interactableManager
-        )
-    }
-
-    private var areControlsVisible: Bool {
-        !isIntroBlockingHUD && !isStoryDialogBlockingControls && (
-            interactableManager.activeMonologue == nil || isMonologueDismissing
-        )
-    }
-
-    var body: some View {
-        ZStack {
-            HUDView(scene: scene)
-                .opacity(areControlsVisible ? 1 : 0)
-                .allowsHitTesting(areControlsVisible)
-                .animation(.easeInOut(duration: 0.2), value: areControlsVisible)
-
-            ASARYUNHUDOverlay(session: scene.asaryunSession)
-                .opacity(isIntroBlockingHUD ? 0 : 1)
-                .animation(.easeInOut(duration: 0.2), value: isIntroBlockingHUD)
-
-            MonologueObserver(
-                manager: interactableManager,
-                onDismissalStateChange: { isDismissing in
-                    isMonologueDismissing = isDismissing
-                }
-            )
-        }
-        .onChange(of: interactableManager.activeMonologue?.objectName) { _, objectName in
-            if objectName != nil {
-                scene.stopAllMovement()
-            }
-        }
-        .onChange(of: isStoryDialogBlockingControls) { _, isBlocking in
-            if isBlocking {
-                scene.stopAllMovement()
-            }
-        }
-    }
-}
-
-private struct HUDView: View {
-    let scene: RoomScene
-    private let artboardSize = CGSize(width: 402, height: 874)
-    private let buttons: [HUDButtonConfig] = .roomHUD
-
-    var body: some View {
-        GeometryReader { geometry in
-            let scaleX = geometry.size.width / artboardSize.width
-            let scaleY = geometry.size.height / artboardSize.height
-
-            ZStack(alignment: .topLeading) {
-                ForEach(buttons, id: \.name) { button in
-                    PressableButton(
-                        assetName: button.assetName,
-                        size: CGSize(
-                            width: button.size.width * scaleX,
-                            height: button.size.height * scaleY
-                        ),
-                        onPress: {
-                            if button.name == "ActionButton" {
-                                scene.interactableManager.triggerInteraction(
-                                    phase: scene.asaryunSession.phase,
-                                    isDaytime: scene.asaryunSession.isDaytime
-                                )
-                            } else {
-                                setDirection(button.direction, isActive: true)
-                            }
-                        },
-                        onRelease: {
-                            setDirection(button.direction, isActive: false)
-                        },
-                        onQuickTap: {
-                            guard let direction = button.direction else { return }
-                            scene.advanceWormStepFrame(direction)
-                        }
-                    )
-                    .position(
-                        x: button.position.x * scaleX,
-                        y: button.position.y * scaleY
-                    )
-                }
-            }
-            .frame(
-                width: geometry.size.width,
-                height: geometry.size.height,
-                alignment: .topLeading
-            )
-        }
-    }
-
-    private func setDirection(_ direction: MovementDirection?, isActive: Bool) {
-        guard let direction else { return }
-        scene.setMovementDirection(direction, isActive: isActive)
-    }
-}
-
-private struct HUDButtonConfig {
-    let name: String
-    let assetName: String
-    let size: CGSize
-    let position: CGPoint
-    let direction: MovementDirection?
-}
-
-private extension Array where Element == HUDButtonConfig {
-    static let roomHUD: [HUDButtonConfig] = [
-        HUDButtonConfig(
-            name: "ActionButton",
-            assetName: "ActionButton",
-            size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 327, y: 736.35),
-            direction: nil
-        ),
-        HUDButtonConfig(
-            name: "Right",
-            assetName: "Right",
-            size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 185, y: 736.35),
-            direction: .right
-        ),
-        HUDButtonConfig(
-            name: "Left",
-            assetName: "Left",
-            size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 75, y: 736.35),
-            direction: .left
-        ),
-        HUDButtonConfig(
-            name: "Down",
-            assetName: "Down",
-            size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 130, y: 795.15),
-            direction: .down
-        ),
-        HUDButtonConfig(
-            name: "Up",
-            assetName: "Up",
-            size: CGSize(width: 50, height: 57.7),
-            position: CGPoint(x: 130, y: 677.45),
-            direction: .up
-        )
-    ]
-}
-
-private struct PressableButton: View {
-    let assetName: String
-    let size: CGSize
-    var onPress: () -> Void = {}
-    var onRelease: () -> Void = {}
-    var onQuickTap: () -> Void = {}
-
-    @State private var isPressed = false
-    @State private var pressBeganAt: Date?
-    @State private var pressGeneration = 0
-
-    private let minimumPressDuration: TimeInterval = 0.08
-    private let quickTapMaximumDuration: TimeInterval = 0.18
-
-    var body: some View {
-        Image(assetName)
-            .resizable()
-            .frame(width: size.width, height: size.height)
-            .opacity(0.75)
-            .contentShape(Rectangle())
-            .offset(y: isPressed ? 5 : 0)
-            .animation(.easeOut(duration: 0.08), value: isPressed)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard !isPressed else { return }
-                        isPressed = true
-                        pressBeganAt = Date()
-                        pressGeneration += 1
-                        onPress()
-                    }
-                    .onEnded { _ in
-                        finishPress()
-                    }
-            )
-            .onDisappear {
-                cancelPress()
-            }
-    }
-
-    private func finishPress() {
-        let elapsed = pressBeganAt.map { Date().timeIntervalSince($0) } ?? minimumPressDuration
-        let remainingDuration = max(0, minimumPressDuration - elapsed)
-        let completedGeneration = pressGeneration
-        let isQuickTap = elapsed <= quickTapMaximumDuration
-
-        guard remainingDuration > 0 else {
-            onRelease()
-            if isQuickTap {
-                onQuickTap()
-            }
-            isPressed = false
-            pressBeganAt = nil
-            return
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + remainingDuration) {
-            guard pressGeneration == completedGeneration else { return }
-            onRelease()
-            if isQuickTap {
-                onQuickTap()
-            }
-            isPressed = false
-            pressBeganAt = nil
-        }
-    }
-
-    private func cancelPress() {
-        guard isPressed else { return }
-        pressGeneration += 1
-        onRelease()
-        isPressed = false
-        pressBeganAt = nil
     }
 }
 
@@ -542,25 +171,4 @@ private struct PressableButton: View {
     .portrait
 ) {
     GameView()
-}
-
-struct MonologueObserver: View {
-    @ObservedObject var manager: InteractableManager
-    let onDismissalStateChange: (Bool) -> Void
-    
-    var body: some View {
-        if let monologue = manager.activeMonologue {
-            MonologueOverlayView(
-                objectName: monologue.objectName,
-                monologueText: monologue.text,
-                onDismissStarted: {
-                    onDismissalStateChange(true)
-                },
-                onDismiss: {
-                    manager.dismissMonologue()
-                    onDismissalStateChange(false)
-                }
-            )
-        }
-    }
 }

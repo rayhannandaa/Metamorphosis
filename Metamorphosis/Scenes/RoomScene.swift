@@ -2,7 +2,8 @@ import SpriteKit
 import SwiftUI
 
 final class RoomScene: SKScene {
-    let interactableManager = InteractableManager()
+    let interactableManager: InteractableManager
+    let session: GameSessionController
 
     private let config: RoomConfig
     private let playerConfig: PlayerConfig
@@ -12,7 +13,7 @@ final class RoomScene: SKScene {
     private var hasBuiltWorld = false
     private var lastUpdateTime: TimeInterval?
     private var isEscaping = false
-    private var escapeController: ASARYUNEscapeController?
+    private var escapeController: EscapeController?
 
     private lazy var worldController = RoomWorldController(
         scene: self,
@@ -35,18 +36,19 @@ final class RoomScene: SKScene {
         bounds: CGRect(origin: .zero, size: config.sceneSize),
         collisionController: collisionController
     )
-    let asaryunSession = ASARYUNGameSessionController()
-
     init(
         config: RoomConfig,
-        playerConfig: PlayerConfig = .player, // <--- CHANGED FROM .centaur
+        playerConfig: PlayerConfig = .player,
         zoomScale: CGFloat = 1,
-        initialCameraPosition: CGPoint? = nil
+        initialCameraPosition: CGPoint? = nil,
+        dependencies: RoomSceneDependencies = .live()
     ) {
         self.config = config
         self.playerConfig = playerConfig
         self.zoomScale = zoomScale
         self.initialCameraPosition = initialCameraPosition ?? config.initialCameraPosition
+        self.interactableManager = dependencies.interactableManager
+        self.session = dependencies.session
         super.init(size: config.sceneSize)
         scaleMode = .aspectFill
         backgroundColor = .black
@@ -69,17 +71,17 @@ final class RoomScene: SKScene {
         
         interactableManager.setupObjects(in: self)
         interactableManager.onButterflyWindowInteraction = { [weak self] in
-            self?.asaryunSession.requestWindowEscape()
+            self?.session.requestWindowEscape()
             self?.interactableManager.clearCurrentInteraction()
         }
         
         if let window = config.objects.first(where: { $0.name == "Window" }) {
-                escapeController = ASARYUNEscapeController(
+                escapeController = EscapeController(
                     player: playerNode,
                     windowPosition: window.position
                 )
                 let collisionController = self.collisionController
-                asaryunSession.attach(
+                session.attach(
                     scene: self,
                     playerNode: playerNode,
                     windowPosition: window.position,
@@ -89,7 +91,7 @@ final class RoomScene: SKScene {
                         collisionController.isAreaClear(
                             center: position,
                             size: size,
-                            clearance: ASARYUNGameConfig.foodSpawnClearance
+                            clearance: GameConfig.foodSpawnClearance
                         )
                     }
                 )
@@ -98,7 +100,7 @@ final class RoomScene: SKScene {
     
     override func update(_ currentTime: TimeInterval) {
         
-        if asaryunSession.isEscapeRequested || isEscaping || asaryunSession.isVictory {
+        if session.isEscapeRequested || isEscaping || session.isVictory {
             interactableManager.clearCurrentInteraction()
         } else {
             interactableManager.update(
@@ -113,15 +115,15 @@ final class RoomScene: SKScene {
         let deltaTime = currentTime - lastUpdateTime
         if isEscaping {
             // Scripted window flight owns the player animation and motion.
-        } else if asaryunSession.phase == .pupa
-            || asaryunSession.isGameOver
-            || asaryunSession.isEscapeRequested
-            || asaryunSession.isVictory {
+        } else if session.phase == .pupa
+            || session.isGameOver
+            || session.isEscapeRequested
+            || session.isVictory {
             movementController.stop()
         } else {
             movementController.update(deltaTime: deltaTime)
         }
-        asaryunSession.update(deltaTime: deltaTime)
+        session.update(deltaTime: deltaTime)
         
         if let view = self.view {
             cameraNode.position = clampedCameraPosition(
@@ -133,20 +135,20 @@ final class RoomScene: SKScene {
     
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
         // The worm crawls and the butterfly flies; only the pupa is immobile.
-        guard !asaryunSession.isGameOver,
-              !asaryunSession.isEscapeRequested,
+        guard !session.isGameOver,
+              !session.isEscapeRequested,
               !isEscaping,
-              !asaryunSession.isVictory
+              !session.isVictory
         else { return }
-        guard asaryunSession.phase != .pupa || !isActive else { return }
+        guard session.phase != .pupa || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
     }
 
     func advanceWormStepFrame(_ direction: MovementDirection) {
-        guard !asaryunSession.isGameOver,
-              !asaryunSession.isEscapeRequested,
+        guard !session.isGameOver,
+              !session.isEscapeRequested,
               !isEscaping,
-              !asaryunSession.isVictory
+              !session.isVictory
         else { return }
         playerNode.advanceWormStepFrame(facing: direction)
     }
@@ -156,7 +158,7 @@ final class RoomScene: SKScene {
     }
 
     func performWindowEscape(completion: @escaping () -> Void) {
-        guard asaryunSession.phase == .butterfly,
+        guard session.phase == .butterfly,
               !isEscaping,
               let escapeController
         else { return }
@@ -177,8 +179,8 @@ final class RoomScene: SKScene {
         interactableManager.triggerInteraction(
             at: location,
             in: self,
-            phase: asaryunSession.phase,
-            isDaytime: asaryunSession.isDaytime
+            phase: session.phase,
+            isDaytime: session.isDaytime
         )
     }
 
