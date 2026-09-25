@@ -38,6 +38,11 @@ final class PlayerMovementController {
         }
     }
 
+    func stop() {
+        activeDirections.removeAll()
+        player.stopWalking()
+    }
+
     func update(deltaTime: TimeInterval) {
         guard let facing = dominantDirection() else {
             player.stopWalking()

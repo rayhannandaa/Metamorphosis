@@ -31,10 +31,15 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     @Published private(set) var stressValue: CGFloat = 0
     @Published private(set) var hungerValue: CGFloat = ASARYUNGameConfig.initialHungerValue
     @Published private(set) var isGameComplete: Bool = false
+    @Published private(set) var isSurvivalWarning: Bool = false
+    @Published private(set) var isDeathCountdownActive: Bool = false
+    @Published private(set) var isGameOver: Bool = false
+    @Published private(set) var deathCause: ASARYUNDeathCause?
 
     private let clock = ASARYUNGameClock()
     private let stress = ASARYUNStressManager()
     private let hunger = ASARYUNHungerManager()
+    private let death = ASARYUNDeathManager()
 
     private weak var scene: SKScene?
     private weak var playerNode: SKNode?
@@ -102,6 +107,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
 
     /// Starts the day/night clock and survival systems after the intro ends.
     func start() {
+        guard !isGameOver else { return }
         isRunning = true
     }
 
@@ -121,6 +127,8 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         } else {
             sunExposureTimer = 0
         }
+
+        updateDeathState(deltaTime: deltaTime)
 
         hudRefreshAccumulator += deltaTime
         if hudRefreshAccumulator >= ASARYUNGameConfig.hudUpdateInterval {
@@ -164,6 +172,31 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
             deltaTime: deltaTime,
             decayPerSecond: decayRate
         )
+    }
+
+    private func updateDeathState(deltaTime: TimeInterval) {
+        let status = death.update(
+            stress: stress.value,
+            hunger: hunger.value,
+            monitorsHunger: clock.currentPhase == .worm,
+            deltaTime: deltaTime
+        )
+
+        if isSurvivalWarning != status.isWarning {
+            isSurvivalWarning = status.isWarning
+        }
+        if isDeathCountdownActive != status.isCountdownActive {
+            isDeathCountdownActive = status.isCountdownActive
+        }
+        if deathCause != status.cause {
+            deathCause = status.cause
+        }
+
+        guard status.didDie, !isGameOver else { return }
+        stressValue = stress.value
+        hungerValue = hunger.value
+        isGameOver = true
+        isRunning = false
     }
 
     private func handleDayNightChange(_ isDay: Bool) {

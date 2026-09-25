@@ -4,7 +4,7 @@ import Foundation
 
 struct GameView: View {
     private static let roomConfig = RoomConfig.room
-    private let scene = RoomScene(config: roomConfig, zoomScale: 600 / 437)
+    @State private var scene: RoomScene
     
     @State private var showIntroMonologue = true
     @State private var isIntroDismissing = false
@@ -12,6 +12,10 @@ struct GameView: View {
     // Smooth Cutscene states
     @State private var isShowingCutscene: Bool = false
     @State private var cutsceneOpacity: Double = 0.0
+
+    init() {
+        _scene = State(initialValue: Self.makeScene())
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -22,16 +26,19 @@ struct GameView: View {
                 SpriteView(scene: scene, options: [.allowsTransparency])
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipped()
+                    .id(ObjectIdentifier(scene))
 
                 DayTwoCutsceneTrigger(session: scene.asaryunSession) {
                     beginDayTwoCutscene()
                 }
+                .id(ObjectIdentifier(scene.asaryunSession))
 
                 if !isShowingCutscene {
                     GameplayOverlay(
                         scene: scene,
                         isIntroBlockingHUD: showIntroMonologue && !isIntroDismissing
                     )
+                    .id(ObjectIdentifier(scene))
                 }
                 
                 if showIntroMonologue {
@@ -56,6 +63,12 @@ struct GameView: View {
                     .opacity(cutsceneOpacity)
                     .allowsHitTesting(true)
                 }
+
+                ASARYUNSurvivalOverlay(
+                    session: scene.asaryunSession,
+                    onPlayAgain: playAgain
+                )
+                .id(ObjectIdentifier(scene.asaryunSession))
             }
         }
         .ignoresSafeArea()
@@ -83,6 +96,21 @@ struct GameView: View {
             isShowingCutscene = false
             scene.asaryunSession.start()
         }
+    }
+
+    private func playAgain() {
+        let newScene = Self.makeScene()
+
+        showIntroMonologue = false
+        isIntroDismissing = false
+        isShowingCutscene = false
+        cutsceneOpacity = 0
+        scene = newScene
+        newScene.asaryunSession.start()
+    }
+
+    private static func makeScene() -> RoomScene {
+        RoomScene(config: roomConfig, zoomScale: 600 / 437)
     }
 }
 

@@ -97,7 +97,11 @@ final class RoomScene: SKScene {
         defer { lastUpdateTime = currentTime }
         guard let lastUpdateTime else { return }
         let deltaTime = currentTime - lastUpdateTime
-            movementController.update(deltaTime: deltaTime)
+            if asaryunSession.isGameOver {
+                movementController.stop()
+            } else {
+                movementController.update(deltaTime: deltaTime)
+            }
             asaryunSession.update(deltaTime: deltaTime)
         
         if let view = self.view {
@@ -110,11 +114,13 @@ final class RoomScene: SKScene {
     
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
         // The worm crawls and the butterfly flies; only the pupa is immobile.
+        guard !asaryunSession.isGameOver else { return }
         guard asaryunSession.phase != .pupa || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
     }
 
     func advanceWormStepFrame(_ direction: MovementDirection) {
+        guard !asaryunSession.isGameOver else { return }
         playerNode.advanceWormStepFrame(facing: direction)
     }
 

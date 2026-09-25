@@ -60,6 +60,9 @@ enum ASARYUNGameConfig {
     static let hungerGracePeriod: TimeInterval = 5
     static let hungerDepletionPerSecond: CGFloat = 1
     static let hungerRestoreOnFood: CGFloat = 30
+    static let stressWarningThreshold: CGFloat = 95
+    static let hungerWarningThreshold: CGFloat = 5
+    static let deathDelay: TimeInterval = 5
     static let foodPerDay = 4
     static let foodSpawnClearance: CGFloat = 6
     static let foodSpawnMaxAttempts = 100
