@@ -11,6 +11,8 @@ final class RoomScene: SKScene {
     private let cameraNode = SKCameraNode()
     private var hasBuiltWorld = false
     private var lastUpdateTime: TimeInterval?
+    private var isEscaping = false
+    private var escapeController: ASARYUNEscapeController?
 
     private lazy var worldController = RoomWorldController(
         scene: self,
@@ -66,8 +68,16 @@ final class RoomScene: SKScene {
         addChild(playerNode)
         
         interactableManager.setupObjects(in: self)
+        interactableManager.onButterflyWindowInteraction = { [weak self] in
+            self?.asaryunSession.requestWindowEscape()
+            self?.interactableManager.clearCurrentInteraction()
+        }
         
         if let window = config.objects.first(where: { $0.name == "Window" }) {
+                escapeController = ASARYUNEscapeController(
+                    player: playerNode,
+                    windowPosition: window.position
+                )
                 let collisionController = self.collisionController
                 asaryunSession.attach(
                     scene: self,
@@ -88,21 +98,30 @@ final class RoomScene: SKScene {
     
     override func update(_ currentTime: TimeInterval) {
         
-        interactableManager.update(
-            playerPosition: collisionController.interactionPosition(
-                for: playerNode.position
+        if asaryunSession.isEscapeRequested || isEscaping || asaryunSession.isVictory {
+            interactableManager.clearCurrentInteraction()
+        } else {
+            interactableManager.update(
+                playerPosition: collisionController.interactionPosition(
+                    for: playerNode.position
+                )
             )
-        )
+        }
         
         defer { lastUpdateTime = currentTime }
         guard let lastUpdateTime else { return }
         let deltaTime = currentTime - lastUpdateTime
-            if asaryunSession.isGameOver {
-                movementController.stop()
-            } else {
-                movementController.update(deltaTime: deltaTime)
-            }
-            asaryunSession.update(deltaTime: deltaTime)
+        if isEscaping {
+            // Scripted window flight owns the player animation and motion.
+        } else if asaryunSession.phase == .pupa
+            || asaryunSession.isGameOver
+            || asaryunSession.isEscapeRequested
+            || asaryunSession.isVictory {
+            movementController.stop()
+        } else {
+            movementController.update(deltaTime: deltaTime)
+        }
+        asaryunSession.update(deltaTime: deltaTime)
         
         if let view = self.view {
             cameraNode.position = clampedCameraPosition(
@@ -114,14 +133,38 @@ final class RoomScene: SKScene {
     
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
         // The worm crawls and the butterfly flies; only the pupa is immobile.
-        guard !asaryunSession.isGameOver else { return }
+        guard !asaryunSession.isGameOver,
+              !asaryunSession.isEscapeRequested,
+              !isEscaping,
+              !asaryunSession.isVictory
+        else { return }
         guard asaryunSession.phase != .pupa || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
     }
 
     func advanceWormStepFrame(_ direction: MovementDirection) {
-        guard !asaryunSession.isGameOver else { return }
+        guard !asaryunSession.isGameOver,
+              !asaryunSession.isEscapeRequested,
+              !isEscaping,
+              !asaryunSession.isVictory
+        else { return }
         playerNode.advanceWormStepFrame(facing: direction)
+    }
+
+    func stopAllMovement() {
+        movementController.stop()
+    }
+
+    func performWindowEscape(completion: @escaping () -> Void) {
+        guard asaryunSession.phase == .butterfly,
+              !isEscaping,
+              let escapeController
+        else { return }
+
+        isEscaping = true
+        movementController.stop()
+        interactableManager.clearCurrentInteraction()
+        escapeController.perform(completion: completion)
     }
 
     func setPlayerVisible(_ isVisible: Bool) {

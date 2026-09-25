@@ -8,6 +8,9 @@ struct GameView: View {
     
     @State private var showIntroMonologue = true
     @State private var isIntroDismissing = false
+    @State private var showButterflyMonologue = false
+    @State private var showEscapeMonologue = false
+    @State private var isEscapeAnimationPlaying = false
     
     // Smooth Cutscene states
     @State private var isShowingCutscene: Bool = false
@@ -33,17 +36,29 @@ struct GameView: View {
                 }
                 .id(ObjectIdentifier(scene.asaryunSession))
 
+                EscapeRequestTrigger(session: scene.asaryunSession) {
+                    showEscapeMonologue = true
+                }
+                .id(ObjectIdentifier(scene.asaryunSession))
+
                 if !isShowingCutscene {
                     GameplayOverlay(
                         scene: scene,
-                        isIntroBlockingHUD: showIntroMonologue && !isIntroDismissing
+                        isIntroBlockingHUD: showIntroMonologue && !isIntroDismissing,
+                        isStoryDialogBlockingControls: showButterflyMonologue
+                            || showEscapeMonologue
+                            || isEscapeAnimationPlaying
                     )
                     .id(ObjectIdentifier(scene))
                 }
                 
                 if showIntroMonologue {
                     GameIntroMonologueOverlay(
-                        text: "What happened, why did I suddenly shrink",
+                        lines: [
+                            "Is that… me? Why am I a larva?",
+                            "I need to find out what happened.",
+                            "Until then, I have to survive."
+                        ],
                         onDismissStarted: {
                             isIntroDismissing = true
                         },
@@ -64,7 +79,52 @@ struct GameView: View {
                     .allowsHitTesting(true)
                 }
 
+                if showButterflyMonologue {
+                    StoryMonologueSequenceOverlay(lines: [
+                        "All this time, I was afraid of what I was becoming.",
+                        "But this body carried me through the light, the hunger, and the darkness.",
+                        "I may not be who I was… but I can accept who I am now.",
+                        "These wings are mine. It’s time to find my way out."
+                    ]) {
+                        showButterflyMonologue = false
+                        scene.asaryunSession.start()
+                    }
+                }
+
+                if showEscapeMonologue {
+                    StoryMonologueSequenceOverlay(lines: [
+                        "The air is coming through the window.",
+                        "There’s nothing left for me in this room.",
+                        "It’s time to fly."
+                    ]) {
+                        showEscapeMonologue = false
+                        scene.asaryunSession.beginWindowEscape()
+
+                        withAnimation(.easeIn(duration: 1.6)) {
+                            isEscapeAnimationPlaying = true
+                        }
+
+                        scene.performWindowEscape {
+                            scene.asaryunSession.completeWindowEscape()
+                            withAnimation(.easeOut(duration: 0.8)) {
+                                isEscapeAnimationPlaying = false
+                            }
+                        }
+                    }
+                }
+
+                Color(red: 1.0, green: 0.91, blue: 0.65)
+                    .opacity(isEscapeAnimationPlaying ? 0.72 : 0)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+
                 ASARYUNSurvivalOverlay(
+                    session: scene.asaryunSession,
+                    onPlayAgain: playAgain
+                )
+                .id(ObjectIdentifier(scene.asaryunSession))
+
+                ASARYUNVictoryOverlay(
                     session: scene.asaryunSession,
                     onPlayAgain: playAgain
                 )
@@ -75,6 +135,7 @@ struct GameView: View {
     }
 
     private func beginDayTwoCutscene() {
+        scene.stopAllMovement()
         scene.asaryunSession.pause()
         scene.setPlayerVisible(false)
         isShowingCutscene = true
@@ -94,7 +155,7 @@ struct GameView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             isShowingCutscene = false
-            scene.asaryunSession.start()
+            showButterflyMonologue = true
         }
     }
 
@@ -103,6 +164,9 @@ struct GameView: View {
 
         showIntroMonologue = false
         isIntroDismissing = false
+        showButterflyMonologue = false
+        showEscapeMonologue = false
+        isEscapeAnimationPlaying = false
         isShowingCutscene = false
         cutsceneOpacity = 0
         scene = newScene
@@ -111,6 +175,65 @@ struct GameView: View {
 
     private static func makeScene() -> RoomScene {
         RoomScene(config: roomConfig, zoomScale: 600 / 437)
+    }
+}
+
+private struct StoryMonologueSequenceOverlay: View {
+    let lines: [String]
+    let onDismiss: () -> Void
+
+    @State private var lineIndex = 0
+    @State private var isPresented = false
+
+    private let animationDuration = 0.3
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                    .opacity(isPresented ? 0.4 : 0)
+                    .ignoresSafeArea()
+
+                ASARYUNDialogBubble(
+                    text: lines[lineIndex],
+                    hint: "Tap to continue"
+                )
+                .offset(y: isPresented ? 0 : geometry.size.height)
+            }
+        }
+        .contentShape(Rectangle())
+        .animation(.easeOut(duration: animationDuration), value: isPresented)
+        .onAppear {
+            isPresented = true
+        }
+        .onTapGesture {
+            guard isPresented else { return }
+
+            if lineIndex < lines.count - 1 {
+                lineIndex += 1
+                return
+            }
+
+            isPresented = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
+                onDismiss()
+            }
+        }
+    }
+}
+
+private struct EscapeRequestTrigger: View {
+    @ObservedObject var session: ASARYUNGameSessionController
+    let onEscapeRequested: () -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .onChange(of: session.isEscapeRequested, initial: true) { _, isRequested in
+                guard isRequested else { return }
+                onEscapeRequested()
+            }
     }
 }
 
@@ -133,10 +256,11 @@ private struct DayTwoCutsceneTrigger: View {
 }
 
 private struct GameIntroMonologueOverlay: View {
-    let text: String
+    let lines: [String]
     let onDismissStarted: () -> Void
     let onDismiss: () -> Void
     @State private var isPresented = false
+    @State private var lineIndex = 0
 
     private let animationDuration = 0.3
 
@@ -148,7 +272,7 @@ private struct GameIntroMonologueOverlay: View {
                     .ignoresSafeArea()
 
                 ASARYUNDialogBubble(
-                    text: text,
+                    text: lines[lineIndex],
                     hint: "Tap to continue"
                 )
                 .offset(y: isPresented ? 0 : geometry.size.height)
@@ -161,6 +285,12 @@ private struct GameIntroMonologueOverlay: View {
         }
         .onTapGesture {
             guard isPresented else { return }
+
+            if lineIndex < lines.count - 1 {
+                lineIndex += 1
+                return
+            }
+
             onDismissStarted()
             isPresented = false
             DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
@@ -173,19 +303,25 @@ private struct GameIntroMonologueOverlay: View {
 private struct GameplayOverlay: View {
     let scene: RoomScene
     let isIntroBlockingHUD: Bool
+    let isStoryDialogBlockingControls: Bool
     @ObservedObject private var interactableManager: InteractableManager
     @State private var isMonologueDismissing = false
 
-    init(scene: RoomScene, isIntroBlockingHUD: Bool) {
+    init(
+        scene: RoomScene,
+        isIntroBlockingHUD: Bool,
+        isStoryDialogBlockingControls: Bool
+    ) {
         self.scene = scene
         self.isIntroBlockingHUD = isIntroBlockingHUD
+        self.isStoryDialogBlockingControls = isStoryDialogBlockingControls
         _interactableManager = ObservedObject(
             wrappedValue: scene.interactableManager
         )
     }
 
     private var areControlsVisible: Bool {
-        !isIntroBlockingHUD && (
+        !isIntroBlockingHUD && !isStoryDialogBlockingControls && (
             interactableManager.activeMonologue == nil || isMonologueDismissing
         )
     }
@@ -207,6 +343,16 @@ private struct GameplayOverlay: View {
                     isMonologueDismissing = isDismissing
                 }
             )
+        }
+        .onChange(of: interactableManager.activeMonologue?.objectName) { _, objectName in
+            if objectName != nil {
+                scene.stopAllMovement()
+            }
+        }
+        .onChange(of: isStoryDialogBlockingControls) { _, isBlocking in
+            if isBlocking {
+                scene.stopAllMovement()
+            }
         }
     }
 }
@@ -350,6 +496,9 @@ private struct PressableButton: View {
                         finishPress()
                     }
             )
+            .onDisappear {
+                cancelPress()
+            }
     }
 
     private func finishPress() {
@@ -377,6 +526,14 @@ private struct PressableButton: View {
             isPressed = false
             pressBeganAt = nil
         }
+    }
+
+    private func cancelPress() {
+        guard isPressed else { return }
+        pressGeneration += 1
+        onRelease()
+        isPressed = false
+        pressBeganAt = nil
     }
 }
 
