@@ -52,7 +52,7 @@ struct GameView: View {
         }
         .ignoresSafeArea()
         // Listen to the ACTUAL game session day to trigger the event
-        .onChange(of: scene.asaryunSession.day) { newDay in
+        .onChange(of: scene.asaryunSession.day) { _, newDay in
             if newDay == 2 {
                 isShowingCutscene = true
                 

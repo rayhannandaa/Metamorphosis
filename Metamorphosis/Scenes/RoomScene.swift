@@ -109,7 +109,8 @@ final class RoomScene: SKScene {
     }
     
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
-        guard asaryunSession.phase == .worm || !isActive else { return }
+        // The worm crawls and the butterfly flies; only the pupa is immobile.
+        guard asaryunSession.phase != .pupa || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
     }
 
