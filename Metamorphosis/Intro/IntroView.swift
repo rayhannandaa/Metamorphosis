@@ -23,6 +23,8 @@ struct IntroView: View {
     @State private var isDialogVisible = true
     @State private var isTransitionDarkened = false
     @State private var isTransitioning = false
+    @State private var isTextComplete = false
+    @State private var revealRequest = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(onFinished: @escaping () -> Void) {
@@ -56,14 +58,19 @@ struct IntroView: View {
                 .ignoresSafeArea()
                 .opacity(isFinalBlack ? 1 : 0)
 
-            DialogBubbleView(
-                text: Self.monologues[currentMonologueIndex],
-                hint: "Tap to continue"
-            )
-            .opacity(isDialogVisible && !isFinalBlack ? 1 : 0)
-            .offset(
-                y: isDialogVisible || reduceMotion ? 0 : 36
-            )
+            if isDialogVisible && !isFinalBlack {
+                DialogBubbleView(
+                    text: Self.monologues[currentMonologueIndex],
+                    hint: "Tap to continue",
+                    isTextComplete: $isTextComplete,
+                    revealRequest: revealRequest
+                )
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .move(edge: .bottom).combined(with: .opacity)
+                )
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -77,6 +84,11 @@ struct IntroView: View {
     private func advance() {
 
         guard !hasFinished, !isTransitioning else {
+            return
+        }
+
+        guard isTextComplete else {
+            revealRequest += 1
             return
         }
 
@@ -107,35 +119,22 @@ struct IntroView: View {
             playThunder()
         }
 
-        withAnimation(.easeInOut(duration: 0.3)) {
-            isDialogVisible = false
+        isTextComplete = false
+        currentMonologueIndex = monologueIndex
+
+        withAnimation(.easeInOut(duration: 0.45)) {
             isTransitionDarkened = true
+            if entersDarkSequence {
+                isDarkSequence = true
+            }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            var textTransaction = Transaction()
-            textTransaction.disablesAnimations = true
-            withTransaction(textTransaction) {
-                currentMonologueIndex = monologueIndex
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(.easeOut(duration: 0.35)) {
+                isTransitionDarkened = false
             }
 
-            if entersDarkSequence {
-                withAnimation(.easeInOut(duration: 0.45)) {
-                    isDarkSequence = true
-                }
-            }
-
-            let revealDelay: TimeInterval = entersDarkSequence ? 0.45 : 0.05
-            DispatchQueue.main.asyncAfter(deadline: .now() + revealDelay) {
-                withAnimation(.easeOut(duration: 0.35)) {
-                    isDialogVisible = true
-                    isTransitionDarkened = false
-                }
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    isTransitioning = false
-                }
-            }
+            isTransitioning = false
         }
     }
 
@@ -186,19 +185,23 @@ private struct IntroVignette: View {
             ZStack {
                 vignette(
                     shortestSide: shortestSide,
-                    middleOpacity: 0.18,
-                    edgeOpacity: 0.88
+                    startRadiusMultiplier: 0.18,
+                    endRadiusMultiplier: 0.72,
+                    middleOpacity: 0.16,
+                    edgeOpacity: 0.86
                 )
 
                 vignette(
                     shortestSide: shortestSide,
-                    middleOpacity: 0.25,
-                    edgeOpacity: 0.94
+                    startRadiusMultiplier: 0.07,
+                    endRadiusMultiplier: 0.50,
+                    middleOpacity: 0.30,
+                    edgeOpacity: 0.96
                 )
                 .opacity(isContracted ? 1 : 0)
             }
             .animation(
-                .easeInOut(duration: 4.5).repeatForever(autoreverses: true),
+                .easeInOut(duration: 3.7).repeatForever(autoreverses: true),
                 value: isContracted
             )
         }
@@ -208,6 +211,8 @@ private struct IntroVignette: View {
 
     private func vignette(
         shortestSide: CGFloat,
+        startRadiusMultiplier: CGFloat,
+        endRadiusMultiplier: CGFloat,
         middleOpacity: Double,
         edgeOpacity: Double
     ) -> RadialGradient {
@@ -218,8 +223,8 @@ private struct IntroVignette: View {
                 Color.black.opacity(edgeOpacity)
             ],
             center: .center,
-            startRadius: shortestSide * 0.12,
-            endRadius: shortestSide * 0.62
+            startRadius: shortestSide * startRadiusMultiplier,
+            endRadius: shortestSide * endRadiusMultiplier
         )
     }
 }

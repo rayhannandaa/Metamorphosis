@@ -22,19 +22,20 @@ enum GameConfig {
     // MARK: In-game clock
     /// Clock display starts at 06:00 each day.
     static let dayStartHour = 6
+    static let dayEndHour = 18
     /// Clock display advances in 2-hour steps: 06, 08, 10, ... 18.
     static let dayClockStepHours = 2
+    static var dayClockSlotCount: Int {
+        ((dayEndHour - dayStartHour) / dayClockStepHours) + 1
+    }
     /// Clock display starts at 19:00 at night and advances hourly to 00:00.
     static let nightStartHour = 19
     static let nightClockStepHours = 1
+    static let nightClockSlotCount = 6
 
     // MARK: Sunlight ray
-    /// The first sunlight appears 12 seconds after 06:00.
-    static let firstSunRayDelay: TimeInterval = 12
-    /// Five stable positions across the daylight period. The beam's top
-    /// remains attached to the window while its wider bottom edge sweeps
-    /// horizontally, like a lighthouse beam.
-    static let sunRayInterval: TimeInterval = 18
+    /// The light is hidden at 06:00, then occupies one position for every
+    /// displayed daylight step from 08:00 through 18:00.
     static let sunRayTransitionDuration: TimeInterval = 0.75
     static let sunRayAlpha: CGFloat = 0.55
     static let sunRayEdgeBlurRadius: CGFloat = 15
@@ -45,7 +46,7 @@ enum GameConfig {
     static let sunRayBottomWidth: CGFloat = 120
     static let sunRayHeight: CGFloat = 460
     static let sunRayBottomCurveDepth: CGFloat = 30
-    static let sunRayBottomOffsets: [CGFloat] = [-110, -55, 0, 55, 110]
+    static let sunRayBottomOffsets: [CGFloat] = [-110, -66, -22, 22, 66, 110]
 
     // MARK: Demo length
     static let totalDemoDays = 3

@@ -15,6 +15,16 @@ final class PlayerNode: SKSpriteNode {
     // Now listens to the game's actual phase instead of a detached integer
     var currentPhase: GamePhase = .worm {
         didSet {
+            if currentPhase == .butterfly, oldValue != .butterfly {
+                removeAction(forKey: "eat")
+                removeAction(forKey: "deferredWalkStop")
+                isEating = false
+                isWalking = false
+                walkAnimationStartedAt = nil
+                currentFacing = .up
+                yScale = 1
+            }
+
             updateAnimation(facing: currentFacing, isWalking: isWalking, forceUpdate: true)
         }
     }

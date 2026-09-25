@@ -7,6 +7,8 @@ struct DialogSequenceOverlay: View {
 
     @State private var lineIndex = 0
     @State private var isPresented = false
+    @State private var isTextComplete = false
+    @State private var revealRequest = 0
 
     private let animationDuration = 0.3
 
@@ -19,7 +21,9 @@ struct DialogSequenceOverlay: View {
 
                 DialogBubbleView(
                     text: sequence.lines[lineIndex],
-                    hint: "Tap to continue"
+                    hint: "Tap to continue",
+                    isTextComplete: $isTextComplete,
+                    revealRequest: revealRequest
                 )
                 .offset(y: isPresented ? 0 : geometry.size.height)
             }
@@ -32,7 +36,13 @@ struct DialogSequenceOverlay: View {
         .onTapGesture {
             guard isPresented else { return }
 
+            guard isTextComplete else {
+                revealRequest += 1
+                return
+            }
+
             if lineIndex < sequence.lines.count - 1 {
+                isTextComplete = false
                 lineIndex += 1
                 return
             }

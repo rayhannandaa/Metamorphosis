@@ -4,7 +4,8 @@ import Foundation
 final class GameAudioManager {
     static let shared = GameAudioManager()
 
-    private let isAudioEnabled = false
+    private let isBackgroundMusicEnabled = true
+    private let isThunderEnabled = false
     private let audioQueue = DispatchQueue(
         label: "com.rayhannanda.metamorphosis.audio",
         qos: .userInitiated
@@ -19,14 +20,14 @@ final class GameAudioManager {
     private init() {}
 
     func startBackgroundMusic() {
-        guard isAudioEnabled else { return }
+        guard isBackgroundMusicEnabled else { return }
         performWhenSessionIsActive { [weak self] in
             self?.playBackgroundMusicIfNeeded()
         }
     }
 
     func playThunder() {
-        guard isAudioEnabled else { return }
+        guard isThunderEnabled else { return }
         performWhenSessionIsActive { [weak self] in
             self?.playThunderEffect()
         }
@@ -102,7 +103,7 @@ final class GameAudioManager {
         }
 
         guard let url = Bundle.main.url(
-            forResource: "bgmusic",
+            forResource: "calm-whale-danijel-zambo-main-version-45278-02-07",
             withExtension: "mp3"
         ) else { return }
 
