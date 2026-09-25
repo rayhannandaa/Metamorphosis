@@ -1,8 +1,6 @@
 import SpriteKit
 import SwiftUI
 
-
-
 final class RoomScene: SKScene {
     let interactableManager = InteractableManager()
 
@@ -39,7 +37,7 @@ final class RoomScene: SKScene {
 
     init(
         config: RoomConfig,
-        playerConfig: PlayerConfig = .centaur,
+        playerConfig: PlayerConfig = .player, // <--- CHANGED FROM .centaur
         zoomScale: CGFloat = 1,
         initialCameraPosition: CGPoint? = nil
     ) {
@@ -200,12 +198,6 @@ private struct RoomScenePreview: View {
             .background(Color.black)
     }
 }
-
-
-
-
-
-
 
 #Preview(
     traits: .fixedLayout(width: 500, height: 800)

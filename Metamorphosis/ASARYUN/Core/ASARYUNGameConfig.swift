@@ -15,8 +15,8 @@ enum ASARYUNGameConfig {
     /// The complete in-game day + night cycle is 3 minutes.
     /// Day: 06:00–18:00 (90 seconds).
     /// Night: 19:00–00:00 (90 seconds).
-    static let dayDuration: TimeInterval = 90
-    static let nightDuration: TimeInterval = 90
+    static let dayDuration: TimeInterval = 30
+    static let nightDuration: TimeInterval = 30
     static var cycleDuration: TimeInterval { dayDuration + nightDuration }
 
     // MARK: In-game clock
