@@ -41,6 +41,7 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
     private var dayNight: ASARYUNDayNightController?
     private var foodNodes: [ASARYUNFoodNode] = []
     private var hasAttached = false
+    private var isRunning = false
     private var hudRefreshAccumulator: TimeInterval = 0
     private var pendingStressValue: CGFloat = 0
     private var pendingHungerValue: CGFloat = ASARYUNGameConfig.initialHungerValue
@@ -99,11 +100,21 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         spawnFood(count: ASARYUNGameConfig.foodPerDay)
     }
 
+    /// Starts the day/night clock and survival systems after the intro ends.
+    func start() {
+        isRunning = true
+    }
+
+    /// Freezes the clock and survival systems during a full-screen cutscene.
+    func pause() {
+        isRunning = false
+    }
+
     func update(deltaTime: TimeInterval) {
-        guard hasAttached, deltaTime.isFinite, deltaTime > 0 else { return }
+        guard isRunning, hasAttached, deltaTime.isFinite, deltaTime > 0 else { return }
 
         clock.update(deltaTime: deltaTime)
-        stress.update(deltaTime: deltaTime)
+        updateStress(deltaTime: deltaTime)
         if clock.currentPhase == .worm {
             hunger.update(deltaTime: deltaTime)
             updateSunExposure(deltaTime: deltaTime)
@@ -140,6 +151,19 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
             sunExposureTimer -= ASARYUNGameConfig.stressSunIntervalSeconds
             stress.registerSunHit()
         }
+    }
+
+    private func updateStress(deltaTime: TimeInterval) {
+        let isExposedToSunlight = clock.isDaytime && sunContactCount > 0
+        guard !isExposedToSunlight else { return }
+
+        let decayRate = clock.isDaytime
+            ? ASARYUNGameConfig.stressDecayPerSecond
+            : ASARYUNGameConfig.nighttimeStressDecayPerSecond
+        stress.update(
+            deltaTime: deltaTime,
+            decayPerSecond: decayRate
+        )
     }
 
     private func handleDayNightChange(_ isDay: Bool) {
@@ -230,6 +254,9 @@ final class ASARYUNGameSessionController: NSObject, ObservableObject, SKPhysicsC
         } else if categories == (ASARYUNPhysicsCategory.player | ASARYUNPhysicsCategory.food) {
             let foodBody = contact.bodyA.categoryBitMask == ASARYUNPhysicsCategory.food ? contact.bodyA : contact.bodyB
             guard let foodNode = foodBody.node as? ASARYUNFoodNode else { return }
+            if phase == .worm, let player = playerNode as? PlayerNode {
+                player.playEatingAnimation()
+            }
             hunger.feed()
             foodNode.removeFromParent()
             foodNodes.removeAll { $0 === foodNode }

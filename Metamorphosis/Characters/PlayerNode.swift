@@ -1,10 +1,16 @@
 // Characters/PlayerNode.swift
+import Foundation
 import SpriteKit
 
 final class PlayerNode: SKSpriteNode {
     private let config: PlayerConfig
     private var currentFacing: MovementDirection
     private var isWalking = false
+    private var isEating = false
+    private var walkAnimationStartedAt: TimeInterval?
+    private var wormStepFrameIndex = 0
+
+    private let minimumWalkAnimationDuration: TimeInterval = 0.25
     
     // Now listens to the game's actual phase instead of a detached integer
     var currentPhase: ASARYUNGamePhase = .worm {
@@ -37,13 +43,113 @@ final class PlayerNode: SKSpriteNode {
     }
     
     func move(by translation: CGVector, facing: MovementDirection) {
+        removeAction(forKey: "deferredWalkStop")
         position.x += translation.dx
         position.y += translation.dy
         updateAnimation(facing: facing, isWalking: true)
     }
 
     func stopWalking() {
-        updateAnimation(facing: currentFacing, isWalking: false)
+        guard isWalking else { return }
+
+        let elapsed = walkAnimationStartedAt.map {
+            Date.timeIntervalSinceReferenceDate - $0
+        } ?? minimumWalkAnimationDuration
+        let remainingDuration = max(0, minimumWalkAnimationDuration - elapsed)
+
+        guard remainingDuration > 0 else {
+            updateAnimation(facing: currentFacing, isWalking: false)
+            return
+        }
+        guard action(forKey: "deferredWalkStop") == nil else { return }
+
+        run(
+            .sequence([
+                .wait(forDuration: remainingDuration),
+                .run { [weak self] in
+                    guard let self else { return }
+                    self.updateAnimation(
+                        facing: self.currentFacing,
+                        isWalking: false
+                    )
+                }
+            ]),
+            withKey: "deferredWalkStop"
+        )
+    }
+
+    func advanceWormStepFrame(facing: MovementDirection) {
+        guard currentPhase == .worm, !isEating else { return }
+
+        removeAction(forKey: "walk")
+        removeAction(forKey: "deferredWalkStop")
+        currentFacing = facing
+        isWalking = false
+        walkAnimationStartedAt = nil
+        wormStepFrameIndex = wormStepFrameIndex == 0 ? 1 : 0
+
+        let direction = Self.textureDirectionUsingNorthForVertical(facing)
+        let texture = SKTexture(
+            imageNamed: "Worm_\(direction)_\(wormStepFrameIndex)"
+        )
+        texture.filteringMode = .nearest
+        yScale = facing == .down ? -1 : 1
+        applyTextureFittingConfiguredSize(texture)
+    }
+
+    func playEatingAnimation() {
+        guard currentPhase == .worm,
+              !isEating,
+              currentFacing == .left || currentFacing == .right
+        else {
+            return
+        }
+
+        let facesLeft = currentFacing == .left
+        let sideDirection = facesLeft ? "W" : "E"
+        let eatingAsset = facesLeft ? "Worm_Eats_L" : "Worm_Eats_R"
+        let normal0 = SKTexture(imageNamed: "Worm_\(sideDirection)_0")
+        let normal1 = SKTexture(imageNamed: "Worm_\(sideDirection)_1")
+        let eating = SKTexture(imageNamed: eatingAsset)
+        [normal0, normal1, eating].forEach { $0.filteringMode = .nearest }
+
+        isEating = true
+        yScale = 1
+        removeAction(forKey: "walk")
+
+        let frames: [(texture: SKTexture, duration: TimeInterval, scale: CGFloat)] = [
+            (normal0, 0.12, 1),
+            (normal1, 0.12, 1),
+            (eating, 0.20, 0.9),
+            (normal1, 0.12, 1),
+            (normal0, 0.12, 1)
+        ]
+        let steps: [SKAction] = frames.flatMap { frame in
+            [
+                SKAction.run { [weak self] in
+                    self?.applyTextureFittingConfiguredSize(
+                        frame.texture,
+                        relativeScale: frame.scale
+                    )
+                },
+                SKAction.wait(forDuration: frame.duration)
+            ]
+        }
+
+        run(
+            .sequence(steps + [
+                .run { [weak self] in
+                    guard let self else { return }
+                    self.isEating = false
+                    self.updateAnimation(
+                        facing: self.currentFacing,
+                        isWalking: self.isWalking,
+                        forceUpdate: true
+                    )
+                }
+            ]),
+            withKey: "eat"
+        )
     }
     
     /// Applies the texture and proportionally scales it down to fit the configured size width (64)
@@ -61,7 +167,10 @@ final class PlayerNode: SKSpriteNode {
 
     /// Fits the complete artwork inside the configured size while preserving
     /// its aspect ratio across horizontal and vertical directions.
-    private func applyTextureFittingConfiguredSize(_ newTexture: SKTexture) {
+    private func applyTextureFittingConfiguredSize(
+        _ newTexture: SKTexture,
+        relativeScale: CGFloat = 1
+    ) {
         texture = newTexture
         let textureSize = newTexture.size()
 
@@ -70,7 +179,7 @@ final class PlayerNode: SKSpriteNode {
         let scale = min(
             config.size.width / textureSize.width,
             config.size.height / textureSize.height
-        )
+        ) * relativeScale
         size = CGSize(
             width: textureSize.width * scale,
             height: textureSize.height * scale
@@ -84,8 +193,15 @@ final class PlayerNode: SKSpriteNode {
         currentFacing = facing
         self.isWalking = isWalking
 
+        guard !isEating else { return }
         guard facingChanged || walkStateChanged || forceUpdate else { return }
         removeAction(forKey: "walk")
+
+        if isWalking {
+            walkAnimationStartedAt = Date.timeIntervalSinceReferenceDate
+        } else {
+            walkAnimationStartedAt = nil
+        }
         
         switch currentPhase {
         case .worm:
@@ -105,6 +221,7 @@ final class PlayerNode: SKSpriteNode {
             } else {
                 let idleTex = SKTexture(imageNamed: "Worm_\(wormDirection)_0")
                 idleTex.filteringMode = .nearest
+                wormStepFrameIndex = 0
                 applyTextureFittingConfiguredSize(idleTex)
             }
             

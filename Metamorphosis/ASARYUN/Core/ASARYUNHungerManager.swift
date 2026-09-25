@@ -15,10 +15,21 @@ final class ASARYUNHungerManager {
     var onStarving: (() -> Void)?
 
     private var didNotifyStarving = false
+    private var graceTimeRemaining = ASARYUNGameConfig.hungerGracePeriod
 
     func update(deltaTime: TimeInterval) {
         guard value > 0 else { return }
-        value = max(0, value - ASARYUNGameConfig.hungerDepletionPerSecond * CGFloat(deltaTime))
+
+        var depletionTime = deltaTime
+        if graceTimeRemaining > 0 {
+            let elapsedGraceTime = min(graceTimeRemaining, depletionTime)
+            graceTimeRemaining -= elapsedGraceTime
+            depletionTime -= elapsedGraceTime
+        }
+
+        guard depletionTime > 0 else { return }
+
+        value = max(0, value - ASARYUNGameConfig.hungerDepletionPerSecond * CGFloat(depletionTime))
         onChange?(value)
         if value == 0, !didNotifyStarving {
             didNotifyStarving = true
@@ -27,6 +38,7 @@ final class ASARYUNHungerManager {
     }
 
     func feed() {
+        graceTimeRemaining = ASARYUNGameConfig.hungerGracePeriod
         let updated = min(ASARYUNGameConfig.maxBarValue, value + ASARYUNGameConfig.hungerRestoreOnFood)
         guard updated != value else { return }
         value = updated
@@ -36,6 +48,7 @@ final class ASARYUNHungerManager {
 
     func reset() {
         value = ASARYUNGameConfig.initialHungerValue
+        graceTimeRemaining = ASARYUNGameConfig.hungerGracePeriod
         didNotifyStarving = false
         onChange?(value)
     }

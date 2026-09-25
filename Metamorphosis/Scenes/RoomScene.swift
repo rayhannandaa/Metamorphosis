@@ -114,6 +114,14 @@ final class RoomScene: SKScene {
         movementController.setDirection(direction, isActive: isActive)
     }
 
+    func advanceWormStepFrame(_ direction: MovementDirection) {
+        playerNode.advanceWormStepFrame(facing: direction)
+    }
+
+    func setPlayerVisible(_ isVisible: Bool) {
+        playerNode.isHidden = !isVisible
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)

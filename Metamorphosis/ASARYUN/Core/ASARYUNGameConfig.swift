@@ -56,7 +56,9 @@ enum ASARYUNGameConfig {
     static let stressIncreasePerSunHit: CGFloat = 18
     static let stressSunIntervalSeconds: TimeInterval = 1.25
     static let stressDecayPerSecond: CGFloat = 1.5
-    static let hungerDepletionPerSecond: CGFloat = (maxBarValue / 2) / CGFloat(cycleDuration)
+    static let nighttimeStressDecayPerSecond: CGFloat = 2.25
+    static let hungerGracePeriod: TimeInterval = 5
+    static let hungerDepletionPerSecond: CGFloat = 1
     static let hungerRestoreOnFood: CGFloat = 30
     static let foodPerDay = 4
     static let foodSpawnClearance: CGFloat = 6
