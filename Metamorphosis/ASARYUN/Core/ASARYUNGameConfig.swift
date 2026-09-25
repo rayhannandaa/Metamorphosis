@@ -57,8 +57,8 @@ enum ASARYUNGameConfig {
     static let stressSunIntervalSeconds: TimeInterval = 1.25
     static let stressDecayPerSecond: CGFloat = 1.5
     static let nighttimeStressDecayPerSecond: CGFloat = 2.25
-    static let hungerGracePeriod: TimeInterval = 5
-    static let hungerDepletionPerSecond: CGFloat = 1
+    static let hungerGracePeriod: TimeInterval = 2
+    static let hungerDepletionPerSecond: CGFloat = 4
     static let hungerRestoreOnFood: CGFloat = 30
     static let stressWarningThreshold: CGFloat = 95
     static let hungerWarningThreshold: CGFloat = 5
