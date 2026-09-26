@@ -13,7 +13,7 @@ class GameViewController: UIViewController {
         super.viewDidLoad()
 
         let hostingController = UIHostingController(
-            rootView: ASARYUNIntroRootView()
+            rootView: IntroRootView()
         )
         
         addChild(hostingController)

@@ -2,7 +2,8 @@ import SpriteKit
 import SwiftUI
 
 final class RoomScene: SKScene {
-    let interactableManager = InteractableManager()
+    let interactableManager: InteractableManager
+    let session: GameSessionController
 
     private let config: RoomConfig
     private let playerConfig: PlayerConfig
@@ -11,6 +12,9 @@ final class RoomScene: SKScene {
     private let cameraNode = SKCameraNode()
     private var hasBuiltWorld = false
     private var lastUpdateTime: TimeInterval?
+    private var isEscaping = false
+    private var escapeController: EscapeController?
+    private var cocoonCutsceneController: CocoonCutsceneController?
 
     private lazy var worldController = RoomWorldController(
         scene: self,
@@ -33,18 +37,19 @@ final class RoomScene: SKScene {
         bounds: CGRect(origin: .zero, size: config.sceneSize),
         collisionController: collisionController
     )
-    let asaryunSession = ASARYUNGameSessionController()
-
     init(
         config: RoomConfig,
-        playerConfig: PlayerConfig = .player, // <--- CHANGED FROM .centaur
+        playerConfig: PlayerConfig = .player,
         zoomScale: CGFloat = 1,
-        initialCameraPosition: CGPoint? = nil
+        initialCameraPosition: CGPoint? = nil,
+        dependencies: RoomSceneDependencies = .live()
     ) {
         self.config = config
         self.playerConfig = playerConfig
         self.zoomScale = zoomScale
         self.initialCameraPosition = initialCameraPosition ?? config.initialCameraPosition
+        self.interactableManager = dependencies.interactableManager
+        self.session = dependencies.session
         super.init(size: config.sceneSize)
         scaleMode = .aspectFill
         backgroundColor = .black
@@ -59,6 +64,12 @@ final class RoomScene: SKScene {
         setupCameraIfNeeded(in: view)
     }
 
+    /// Builds the scene graph before its SKView is mounted, keeping texture
+    /// and node construction out of the visible intro-to-game transition.
+    func prepareForPresentation() {
+        buildWorldIfNeeded()
+    }
+
     private func buildWorldIfNeeded() {
         guard !hasBuiltWorld else { return }
         hasBuiltWorld = true
@@ -66,10 +77,18 @@ final class RoomScene: SKScene {
         addChild(playerNode)
         
         interactableManager.setupObjects(in: self)
+        interactableManager.onButterflyWindowInteraction = { [weak self] in
+            self?.session.requestWindowEscape()
+            self?.interactableManager.clearCurrentInteraction()
+        }
         
         if let window = config.objects.first(where: { $0.name == "Window" }) {
+                escapeController = EscapeController(
+                    player: playerNode,
+                    windowPosition: window.position
+                )
                 let collisionController = self.collisionController
-                asaryunSession.attach(
+                session.attach(
                     scene: self,
                     playerNode: playerNode,
                     windowPosition: window.position,
@@ -79,7 +98,7 @@ final class RoomScene: SKScene {
                         collisionController.isAreaClear(
                             center: position,
                             size: size,
-                            clearance: ASARYUNGameConfig.foodSpawnClearance
+                            clearance: GameConfig.foodSpawnClearance
                         )
                     }
                 )
@@ -88,17 +107,30 @@ final class RoomScene: SKScene {
     
     override func update(_ currentTime: TimeInterval) {
         
-        interactableManager.update(
-            playerPosition: collisionController.interactionPosition(
-                for: playerNode.position
+        if session.isEscapeRequested || isEscaping || session.isVictory {
+            interactableManager.clearCurrentInteraction()
+        } else {
+            interactableManager.update(
+                playerPosition: collisionController.interactionPosition(
+                    for: playerNode.position
+                )
             )
-        )
+        }
         
         defer { lastUpdateTime = currentTime }
         guard let lastUpdateTime else { return }
         let deltaTime = currentTime - lastUpdateTime
+        if isEscaping {
+            // Scripted window flight owns the player animation and motion.
+        } else if session.phase == .pupa
+            || session.isGameOver
+            || session.isEscapeRequested
+            || session.isVictory {
+            movementController.stop()
+        } else {
             movementController.update(deltaTime: deltaTime)
-            asaryunSession.update(deltaTime: deltaTime)
+        }
+        session.update(deltaTime: deltaTime)
         
         if let view = self.view {
             cameraNode.position = clampedCameraPosition(
@@ -109,8 +141,56 @@ final class RoomScene: SKScene {
     }
     
     func setMovementDirection(_ direction: MovementDirection, isActive: Bool) {
-        guard asaryunSession.phase == .worm || !isActive else { return }
+        // The worm crawls and the butterfly flies; only the pupa is immobile.
+        guard !session.isGameOver,
+              !session.isEscapeRequested,
+              !isEscaping,
+              !session.isVictory
+        else { return }
+        guard session.phase != .pupa || !isActive else { return }
         movementController.setDirection(direction, isActive: isActive)
+    }
+
+    func advanceWormStepFrame(_ direction: MovementDirection) {
+        guard !session.isGameOver,
+              !session.isEscapeRequested,
+              !isEscaping,
+              !session.isVictory
+        else { return }
+        playerNode.advanceWormStepFrame(facing: direction)
+    }
+
+    func stopAllMovement() {
+        movementController.stop()
+    }
+
+    func performWindowEscape(completion: @escaping () -> Void) {
+        guard session.phase == .butterfly,
+              !isEscaping,
+              let escapeController
+        else { return }
+
+        isEscaping = true
+        movementController.stop()
+        interactableManager.clearCurrentInteraction()
+        escapeController.perform(completion: completion)
+    }
+
+    func setPlayerVisible(_ isVisible: Bool) {
+        playerNode.isHidden = !isVisible
+    }
+
+    func setInitialContentVisible(_ isVisible: Bool) {
+        setPlayerVisible(isVisible)
+        session.setFoodVisible(isVisible)
+    }
+
+    func showCocoonCutscene() {
+        cocoonCutsceneController?.show()
+    }
+
+    func hideCocoonCutscene(completion: @escaping () -> Void) {
+        cocoonCutsceneController?.hide(completion: completion)
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -119,8 +199,8 @@ final class RoomScene: SKScene {
         interactableManager.triggerInteraction(
             at: location,
             in: self,
-            phase: asaryunSession.phase,
-            isDaytime: asaryunSession.isDaytime
+            phase: session.phase,
+            isDaytime: session.isDaytime
         )
     }
 
@@ -134,6 +214,18 @@ final class RoomScene: SKScene {
         )
         addChild(cameraNode)
         camera = cameraNode
+
+        let baseScale = max(
+            view.bounds.width / config.sceneSize.width,
+            view.bounds.height / config.sceneSize.height
+        )
+        cocoonCutsceneController = CocoonCutsceneController(
+            cameraNode: cameraNode,
+            overlaySize: CGSize(
+                width: view.bounds.width / baseScale,
+                height: view.bounds.height / baseScale
+            )
+        )
     }
 
     private func clampedCameraPosition(
